@@ -75,10 +75,10 @@
 #define  GMAC_MAC_FRM_FILT_PR		(1 << 0)
 #define GMAC_HASH_TAB_HI	0x0008
 #define GMAC_HASH_TAB_LO	0x000c
-#define GMAC_GMII_ADDR		0x0010
-#define  GMAC_GMII_ADDR_PA_SHIFT	11
-#define  GMAC_GMII_ADDR_GR_SHIFT	6
-#define  GMAC_GMII_ADDR_CR_SHIFT	2
+#define GMAC_GMII_ADDR		0x0200
+#define  GMAC_GMII_ADDR_PA_SHIFT	21
+#define  GMAC_GMII_ADDR_GR_SHIFT	16
+#define  GMAC_GMII_ADDR_CR_SHIFT	8
 #define  GMAC_GMII_ADDR_CR_MASK		0xf
 #define  GMAC_GMII_ADDR_CR_DIV_42	0
 #define  GMAC_GMII_ADDR_CR_DIV_62	1
@@ -88,7 +88,9 @@
 #define  GMAC_GMII_ADDR_CR_DIV_124	5
 #define  GMAC_GMII_ADDR_GW		(1 << 1)
 #define  GMAC_GMII_ADDR_GB		(1 << 0)
-#define GMAC_GMII_DATA		0x0014
+#define  GMAC_GMII_ADDR_GMAC4_WRITE	(1 << 2)
+#define  GMAC_GMII_ADDR_GMAC4_READ	(3 << 2)
+#define GMAC_GMII_DATA		0x0204
 #define GMAC_VERSION		0x0020
 #define  GMAC_VERSION_SNPS_MASK		0xff
 #define GMAC_INT_MASK		0x003c
@@ -756,8 +758,9 @@ dwge_mii_readreg(struct device *self, int phy, int reg)
 	    sc->sc_clk << GMAC_GMII_ADDR_CR_SHIFT |
 	    phy << GMAC_GMII_ADDR_PA_SHIFT |
 	    reg << GMAC_GMII_ADDR_GR_SHIFT |
-	    GMAC_GMII_ADDR_GB);
-	for (n = 0; n < 1000; n++) {
+	    GMAC_GMII_ADDR_GB |
+	    GMAC_GMII_ADDR_GMAC4_READ);
+	for (n = 0; n < 100000; n++) {
 		if ((dwge_read(sc, GMAC_GMII_ADDR) & GMAC_GMII_ADDR_GB) == 0)
 			return dwge_read(sc, GMAC_GMII_DATA);
 		delay(10);
@@ -778,8 +781,9 @@ dwge_mii_writereg(struct device *self, int phy, int reg, int val)
 	    sc->sc_clk << GMAC_GMII_ADDR_CR_SHIFT |
 	    phy << GMAC_GMII_ADDR_PA_SHIFT |
 	    reg << GMAC_GMII_ADDR_GR_SHIFT |
-	    GMAC_GMII_ADDR_GW | GMAC_GMII_ADDR_GB);
-	for (n = 0; n < 1000; n++) {
+	    GMAC_GMII_ADDR_GB |
+	    GMAC_GMII_ADDR_GMAC4_WRITE);
+	for (n = 0; n < 100000; n++) {
 		if ((dwge_read(sc, GMAC_GMII_ADDR) & GMAC_GMII_ADDR_GB) == 0)
 			return;
 		delay(10);
@@ -1459,7 +1463,7 @@ dwge_setup_nxp(struct dwge_softc *sc)
 	OF_getprop(sc->sc_node, "phy-mode", phy_mode, sizeof(phy_mode));
 
 	if (OF_getpropintarray(sc->sc_node, "intf_mode", intf_mode,
-	    sizeof(intf_mode) != sizeof(intf_mode)))
+	    sizeof(intf_mode)) != sizeof(intf_mode))
 		return;
 
 	if ((rm = regmap_byphandle(intf_mode[0])) == NULL)

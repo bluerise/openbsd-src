@@ -273,6 +273,7 @@ struct dwge_softc {
 int	dwge_match(struct device *, void *, void *);
 void	dwge_attach(struct device *, struct device *, void *);
 void	dwge_setup_allwinner(struct dwge_softc *);
+void	dwge_setup_nxp(struct dwge_softc *);
 void	dwge_setup_rockchip(struct dwge_softc *);
 
 const struct cfattach dwge_ca = {
@@ -331,6 +332,7 @@ dwge_match(struct device *parent, void *cfdata, void *aux)
 	return (OF_is_compatible(faa->fa_node, "allwinner,sun7i-a20-gmac") ||
 	    OF_is_compatible(faa->fa_node, "amlogic,meson-axg-dwmac") ||
 	    OF_is_compatible(faa->fa_node, "amlogic,meson-g12a-dwmac") ||
+	    OF_is_compatible(faa->fa_node, "nxp,imx8mp-dwmac-eqos") ||
 	    OF_is_compatible(faa->fa_node, "rockchip,rk3288-gmac") ||
 	    OF_is_compatible(faa->fa_node, "rockchip,rk3308-mac") ||
 	    OF_is_compatible(faa->fa_node, "rockchip,rk3328-gmac") ||
@@ -445,6 +447,8 @@ dwge_attach(struct device *parent, struct device *self, void *aux)
 	    OF_is_compatible(faa->fa_node, "rockchip,rk3328-gmac") ||
 	    OF_is_compatible(faa->fa_node, "rockchip,rk3399-gmac"))
 		dwge_setup_rockchip(sc);
+	if (OF_is_compatible(faa->fa_node, "nxp,imx8mp-dwmac-eqos"))
+		dwge_setup_nxp(sc);
 
 	if (OF_getpropbool(faa->fa_node, "snps,force_thresh_dma_mode"))
 		sc->sc_force_thresh_dma_mode = 1;
@@ -1430,6 +1434,50 @@ dwge_setup_allwinner(struct dwge_softc *sc)
 }
 
 /*
+ * NXP i.MX8MP
+ */
+
+#define IMX8MP_INTF_MODE_MASK		(0x3f << 16)
+#define IMX8MP_INTF_SEL_MII		(0x0 << 16)
+#define IMX8MP_INTF_SEL_RMII		(0x4 << 16)
+#define IMX8MP_INTF_SEL_RGMII		(0x1 << 16)
+#define IMX8MP_CLK_GEN_EN		(1 << 19)
+#define IMX8MP_CLK_TX_CLK_SEL		(1 << 20)
+#define IMX8MP_RGMII_EN			(1 << 21)
+
+void
+dwge_setup_nxp(struct dwge_softc *sc)
+{
+	struct regmap *rm;
+	uint32_t intf_mode[2];
+	char phy_mode[16];
+	uint32_t reg;
+
+	clock_enable(sc->sc_node, "pclk");
+	clock_enable(sc->sc_node, "tx");
+
+	OF_getprop(sc->sc_node, "phy-mode", phy_mode, sizeof(phy_mode));
+
+	if (OF_getpropintarray(sc->sc_node, "intf_mode", intf_mode,
+	    sizeof(intf_mode) != sizeof(intf_mode)))
+		return;
+
+	if ((rm = regmap_byphandle(intf_mode[0])) == NULL)
+		return;
+
+	reg = regmap_read_4(rm, intf_mode[1]);
+	reg &= ~IMX8MP_INTF_MODE_MASK;
+	if (strcmp(phy_mode, "rgmii-id") == 0 ||
+	    strcmp(phy_mode, "rgmii-rxid") == 0 ||
+	    strcmp(phy_mode, "rgmii-txid") == 0)
+		reg |= IMX8MP_RGMII_EN | IMX8MP_INTF_SEL_RGMII;
+	else if (strcmp(phy_mode, "rmii") == 0)
+		reg |= IMX8MP_CLK_TX_CLK_SEL | IMX8MP_INTF_SEL_RMII;
+	reg |= IMX8MP_CLK_GEN_EN;
+	regmap_write_4(rm, intf_mode[1], reg);
+}
+
+/*
  * Rockchip RK3288/RK3399.
  */
 
@@ -1500,6 +1548,11 @@ dwge_setup_rockchip(struct dwge_softc *sc)
 	rm = regmap_byphandle(grf);
 	if (rm == NULL)
 		return;
+
+	clock_enable(sc->sc_node, "mac_clk_rx");
+	clock_enable(sc->sc_node, "mac_clk_tx");
+	clock_enable(sc->sc_node, "aclk_mac");
+	clock_enable(sc->sc_node, "pclk_mac");
 
 	tx_delay = OF_getpropint(sc->sc_node, "tx_delay", 0x30);
 	rx_delay = OF_getpropint(sc->sc_node, "rx_delay", 0x10);

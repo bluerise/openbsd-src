@@ -23,6 +23,7 @@
 #include <machine/fdt.h>
 
 #include <dev/ofw/openfirm.h>
+#include <dev/ofw/ofw_clock.h>
 #include <dev/ofw/ofw_misc.h>
 #include <dev/ofw/fdt.h>
 
@@ -52,6 +53,11 @@ imxpciephy_match(struct device *parent, void *match, void *aux)
 	if (OF_is_compatible(node, "fsl,imx7d-pcie-phy"))
 		return 10;	/* Must beat syscon(4). */
 
+	/* Not supposed to be a regmap, but we'll use it like it. */
+	if (OF_is_compatible(node, "fsl,imx8mp-hsio-mix") |
+	    OF_is_compatible(node, "fsl,imx8mp-pcie-phy"))
+		return 1;
+
 	return 0;
 }
 
@@ -75,6 +81,11 @@ imxpciephy_attach(struct device *parent, struct device *self, void *aux)
 
 	regmap_register(faa->fa_node, sc->sc_iot, sc->sc_ioh,
 	    faa->fa_reg[0].size);
+
+	if (OF_is_compatible(faa->fa_node, "fsl,imx8mp-pcie-phy")) {
+		clock_set_assigned(faa->fa_node);
+		clock_enable_all(faa->fa_node);
+	}
 
 	printf("\n");
 }

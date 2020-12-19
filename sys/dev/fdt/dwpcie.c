@@ -204,11 +204,11 @@
 #define  LANE_TX_DATA_CLK_MUX_SEL				0x00
 
 #define IMX8MP_PCIE_PHY_TRSV_REG001			0x404
-#define  LN0_OVRD_TX_DRV_LVL					0x2D
+#define  LN0_OVRD_TX_DRV_LVL					0x2d
 #define IMX8MP_PCIE_PHY_TRSV_REG020			0x480
-#define  LN0_RX_CDR_REFDIV_1_2					1
+#define  LN0_RX_CDR_REFDIV_1_2					0x01
 #define IMX8MP_PCIE_PHY_TRSV_REG022			0x488
-#define  LN0_RX_CDR_REFDIV_1_1					0
+#define  LN0_RX_CDR_REFDIV_1_1					0x00
 #define IMX8MP_PCIE_PHY_TRSV_REG0BB			0x6ec
 #define  LN0_TXD_DESKEW_BYPASS					(1 << 2)
 #define IMX8MP_PCIE_PHY_TRSV_REG0CF			0x73c
@@ -933,6 +933,7 @@ dwpcie_imx8mq_init(struct dwpcie_softc *sc)
 
 	power_domain_enable(sc->sc_node);
 	reset_assert(sc->sc_node, "pciephy");
+	reset_assert(sc->sc_node, "pciephy_perst");
 	reset_assert(sc->sc_node, "apps");
 
 	reg = regmap_read_4(gpr, IOMUXC_GPR12);
@@ -987,6 +988,11 @@ dwpcie_imx8mq_init(struct dwpcie_softc *sc)
 			    IMX8MM_PCIE_PHY_TRSV_REG6_GEN2_DEEMP);
 		}
 	} else if (OF_is_compatible(sc->sc_node, "fsl,imx8mp-pcie")) {
+		phy_enable(sc->sc_node, "pcie-phy");
+		clock_enable(sc->sc_node, "pcie_phy");
+		clock_enable(sc->sc_node, "pcie_bus");
+		clock_enable(sc->sc_node, "pcie");
+		clock_enable(sc->sc_node, "pcie_aux");
 		reg = regmap_read_4(hsmix, IMX8MP_GPR_REG2);
 		reg &= ~(IMX8MP_GPR_REG2_P_PLL_MASK |
 		    IMX8MP_GPR_REG2_M_PLL_MASK |
@@ -1035,10 +1041,12 @@ dwpcie_imx8mq_init(struct dwpcie_softc *sc)
 		}
 	}
 
-	clock_enable(sc->sc_node, "pcie_phy");
-	clock_enable(sc->sc_node, "pcie_bus");
-	clock_enable(sc->sc_node, "pcie");
-	clock_enable(sc->sc_node, "pcie_aux");
+	if (!OF_is_compatible(sc->sc_node, "fsl,imx8mp-pcie")) {
+		clock_enable(sc->sc_node, "pcie_phy");
+		clock_enable(sc->sc_node, "pcie_bus");
+		clock_enable(sc->sc_node, "pcie");
+		clock_enable(sc->sc_node, "pcie_aux");
+	}
 
 	/* Allow clocks to stabilize. */
 	delay(200);
@@ -1050,6 +1058,7 @@ dwpcie_imx8mq_init(struct dwpcie_softc *sc)
 	}
 
 	reset_deassert(sc->sc_node, "pciephy");
+	reset_deassert(sc->sc_node, "pciephy_perst");
 
 	if (OF_is_compatible(sc->sc_node, "fsl,imx8mm-pcie")) {
 		for (timo = 2000; timo > 0; timo--) {
@@ -1100,24 +1109,24 @@ dwpcie_imx8mq_init(struct dwpcie_softc *sc)
 			    ANA_AUX_RX_TERM | ANA_AUX_TX_LVL);
 		}
 
-		regmap_write_4(phy,IMX8MP_PCIE_PHY_TRSV_REG001,
+		regmap_write_4(phy, IMX8MP_PCIE_PHY_TRSV_REG001,
 		    LN0_OVRD_TX_DRV_LVL);
-		regmap_write_4(phy,IMX8MP_PCIE_PHY_CMN_REG020,
+		regmap_write_4(phy, IMX8MP_PCIE_PHY_CMN_REG020,
 		    PLL_ANA_LPF_R_SEL_FINE_0_4);
-		regmap_write_4(phy,IMX8MP_PCIE_PHY_CMN_REG076,
+		regmap_write_4(phy, IMX8MP_PCIE_PHY_CMN_REG076,
 		    LANE_RESET_MUX_SEL);
-		regmap_write_4(phy,IMX8MP_PCIE_PHY_CMN_REG078,
+		regmap_write_4(phy, IMX8MP_PCIE_PHY_CMN_REG078,
 		    LANE_TX_DATA_CLK_MUX_SEL);
 		delay(1);
-		regmap_write_4(phy,IMX8MP_PCIE_PHY_CMN_REG036,
+		regmap_write_4(phy, IMX8MP_PCIE_PHY_CMN_REG036,
 		    PLL_PMS_SDIV_8_4);
-		regmap_write_4(phy,IMX8MP_PCIE_PHY_TRSV_REG020,
+		regmap_write_4(phy, IMX8MP_PCIE_PHY_TRSV_REG020,
 		    LN0_RX_CDR_REFDIV_1_2);
-		regmap_write_4(phy,IMX8MP_PCIE_PHY_TRSV_REG022,
+		regmap_write_4(phy, IMX8MP_PCIE_PHY_TRSV_REG022,
 		    LN0_RX_CDR_REFDIV_1_1);
-		regmap_write_4(phy,IMX8MP_PCIE_PHY_TRSV_REG0CF,
+		regmap_write_4(phy, IMX8MP_PCIE_PHY_TRSV_REG0CF,
 		    LN0_MISC_TX_CLK_SRC);
-		regmap_write_4(phy,IMX8MP_PCIE_PHY_TRSV_REG0BB,
+		regmap_write_4(phy, IMX8MP_PCIE_PHY_TRSV_REG0BB,
 		    LN0_TXD_DESKEW_BYPASS);
 		delay(1);
 
@@ -1126,7 +1135,7 @@ dwpcie_imx8mq_init(struct dwpcie_softc *sc)
 		regmap_write_4(gpr, off, reg);
 
 		for (timo = 2000; timo > 0; timo--) {
-			if (regmap_read_4(phy, 0x8188) & (1 << 0))
+			if (regmap_read_4(phy, 0x8188) == (1 << 1))
 				break;
 			delay(10);
 		}

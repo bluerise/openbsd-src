@@ -31,6 +31,7 @@ struct imxpciephy_softc {
 	struct device		sc_dev;
 	bus_space_tag_t		sc_iot;
 	bus_space_handle_t	sc_ioh;
+	struct phy_device	sc_pd;
 };
 
 int	imxpciephy_match(struct device *, void *, void *);
@@ -43,6 +44,8 @@ struct cfattach imxpciephy_ca = {
 struct cfdriver imxpciephy_cd = {
 	NULL, "imxpciephy", DV_DULL
 };
+
+int	imxpciephy_enable(void *, uint32_t *);
 
 int
 imxpciephy_match(struct device *parent, void *match, void *aux)
@@ -83,9 +86,23 @@ imxpciephy_attach(struct device *parent, struct device *self, void *aux)
 	    faa->fa_reg[0].size);
 
 	if (OF_is_compatible(faa->fa_node, "fsl,imx8mp-pcie-phy")) {
-		clock_set_assigned(faa->fa_node);
-		clock_enable_all(faa->fa_node);
+		sc->sc_pd.pd_node = faa->fa_node;
+		sc->sc_pd.pd_cookie = sc;
+		sc->sc_pd.pd_enable = imxpciephy_enable;
+		phy_register(&sc->sc_pd);
 	}
 
 	printf("\n");
+}
+
+int
+imxpciephy_enable(void *cookie, uint32_t *cells)
+{
+	struct imxpciephy_softc *sc = cookie;
+	int node = sc->sc_pd.pd_node;
+
+	printf("%s:%d\n", __func__, __LINE__);
+	clock_set_assigned(node);
+	clock_enable_all(node);
+	return 0;
 }

@@ -1,0 +1,115 @@
+/*
+ * Copyright (c) 2021 Patrick Wildt <patrick@blueri.se>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+enum typec_cc_status {
+	TYPEC_CC_OPEN,
+	TYPEC_CC_RA,
+	TYPEC_CC_RD,
+	TYPEC_CC_RP_DEF,
+	TYPEC_CC_RP_1_5,
+	TYPEC_CC_RP_3_0,
+};
+
+enum typec_data_role {
+	TYPEC_DEVICE,
+	TYPEC_HOST,
+};
+
+enum typec_power_role {
+	TYPEC_SINK,
+	TYPEC_SOURCE,
+};
+
+enum typec_polarity {
+	TYPEC_POLARITY_CC1,
+	TYPEC_POLARITY_CC2,
+};
+
+#define TCPC_TX_SOP				0
+#define TCPC_TX_SOP_PRIME			1
+#define TCPC_TX_SOP_PRIME_PRIME			2
+#define TCPC_TX_SOP_DEBUG_PRIME			3
+#define TCPC_TX_SOP_DEBUG_PRIME_PRIME		4
+#define TCPC_TX_HARD_RESET			5
+#define TCPC_TX_CABLE_RESET			6
+#define TCPC_TX_BIST_MODE_2			7
+
+#define PD_HEADER_TYPE_SHIFT		0
+#define PD_HEADER_TYPE_MASK		0x1f
+#define PD_HEADER_DATA_ROLE		(1 << 5)
+#define PD_HEADER_REV_SHIFT		6
+#define PD_HEADER_REV_MASK		0x3
+#define PD_HEADER_POWER_ROLE		(1 << 8)
+#define PD_HEADER_ID_SHIFT		9
+#define PD_HEADER_ID_MASK		0x7
+#define PD_HEADER_CNT_SHIFT		12
+#define PD_HEADER_CNT_MASK		0x7
+#define PD_HEADER_EXT			(1 << 15)
+#define PD_PAYLOAD_MAX_LEN		7
+
+struct pd_message {
+	uint16_t header;
+	uint32_t payload[PD_PAYLOAD_MAX_LEN];
+};
+
+#define PD_CTRL_GOOD_CRC			1
+#define PD_CTRL_GOTO_MIN			2
+#define PD_CTRL_ACCEPT				3
+#define PD_CTRL_REJECT				4
+#define PD_CTRL_PING				5
+#define PD_CTRL_PS_RDY				6
+#define PD_CTRL_GET_SOURCE_CAP			7
+#define PD_CTRL_GET_SINK_CAP			8
+#define PD_CTRL_DR_SWAP				9
+#define PD_CTRL_PR_SWAP				10
+#define PD_CTRL_VCONN_SWAP			11
+#define PD_CTRL_WAIT				12
+#define PD_CTRL_SOFT_RESET			13
+#define PD_CTRL_NOT_SUPP			16
+#define PD_CTRL_GET_SOURCE_CAP_EXT		17
+#define PD_CTRL_GET_STATUS			18
+#define PD_CTRL_FR_SWAP				19
+#define PD_CTRL_GET_PPS_STATUS			20
+#define PD_CTRL_GET_COUNTRY_CODES		21
+
+#define PD_DATA_SOURCE_CAP			1
+#define PD_DATA_REQUEST				2
+#define PD_DATA_BIST				3
+#define PD_DATA_SINK_CAP			4
+#define PD_DATA_BATT_STATUS			5
+#define PD_DATA_ALERT				6
+#define PD_DATA_GET_COUNTRY_INFO		7
+#define PD_DATA_ENTER_USB			8
+#define PD_DATA_VENDOR_DEF			15
+
+#define PD_EXT_SOURCE_CAP_EXT			1
+#define PD_EXT_STATUS				2
+#define PD_EXT_GET_BATT_CAP			3
+#define PD_EXT_GET_BATT_STATUS			4
+#define PD_EXT_BATT_CAP				5
+#define PD_EXT_GET_MANUFACTURER_INFO		6
+#define PD_EXT_MANUFACTURER_INFO		7
+#define PD_EXT_SECURITY_REQUEST			8
+#define PD_EXT_SECURITY_RESPONSE		9
+#define PD_EXT_FW_UPDATE_REQUEST		10
+#define PD_EXT_FW_UPDATE_RESPONSE		11
+#define PD_EXT_PPS_STATUS			12
+#define PD_EXT_COUNTRY_INFO			13
+#define PD_EXT_COUNTRY_CODES			14
+
+#define PD_REV10				0
+#define PD_REV20				1
+#define PD_REV30				2

@@ -32,6 +32,8 @@
 #include <dev/ofw/ofw_misc.h>
 #include <dev/ofw/ofw_pinctrl.h>
 
+#include <dev/usb/usbpd.h>
+
 /* #define TCPCI_DEBUG */
 
 #ifdef TCPCI_DEBUG
@@ -117,12 +119,19 @@
 #define  TCPC_MSG_HDR_INFO_DATA_ROLE			(1 << 3)
 #define TCPC_RX_DETECT				0x2f
 #define  TCPC_RX_DETECT_SOP				(1 << 0)
+#define  TCPC_RX_DETECT_SOP_PRIME			(1 << 1)
+#define  TCPC_RX_DETECT_SOP_PRIME_PRIME			(1 << 2)
+#define  TCPC_RX_DETECT_SOP_DEBUG_PRIME			(1 << 3)
+#define  TCPC_RX_DETECT_SOP_DEBUG_PRIME_PRIME		(1 << 4)
 #define  TCPC_RX_DETECT_HARD_RESET			(1 << 5)
 #define TCPC_RX_BYTE_CNT			0x30
 #define TCPC_RX_BUF_FRAME_TYPE			0x31
+#define  TCPC_RX_BUF_FRAME_TYPE_MASK			0x7
 #define TCPC_RX_HDR				0x32
 #define TCPC_RX_DATA				0x34 /* through 0x4f */
 #define TCPC_TRANSMIT				0x50
+#define  TCPC_TRANSMIT_RETRY_REV30			(2 << 4)
+#define  TCPC_TRANSMIT_RETRY_DEF			(3 << 4)
 #define TCPC_TX_BYTE_CNT			0x51
 #define TCPC_TX_HDR				0x52
 #define TCPC_TX_DATA				0x54 /* through 0x6f */
@@ -131,30 +140,6 @@
 #define TCPC_VBUS_STOP_DISCHARGE_THRESH		0x74
 #define TCPC_VBUS_VOLTAGE_ALARM_HI_CFG		0x76
 #define TCPC_VBUS_VOLTAGE_ALARM_LO_CFG		0x78
-
-enum typec_cc_status {
-	TYPEC_CC_OPEN,
-	TYPEC_CC_RA,
-	TYPEC_CC_RD,
-	TYPEC_CC_RP_DEF,
-	TYPEC_CC_RP_1_5,
-	TYPEC_CC_RP_3_0,
-};
-
-enum typec_data_role {
-	TYPEC_DEVICE,
-	TYPEC_HOST,
-};
-
-enum typec_power_role {
-	TYPEC_SINK,
-	TYPEC_SOURCE,
-};
-
-enum typec_polarity {
-	TYPEC_POLARITY_CC1,
-	TYPEC_POLARITY_CC2,
-};
 
 struct tcpci_softc {
 	struct device		 sc_dev;
@@ -168,6 +153,15 @@ struct tcpci_softc {
 	int			 sc_attached;
 	enum typec_data_role	 sc_try_data;
 	enum typec_power_role	 sc_try_power;
+	enum typec_data_role	 sc_data_role;
+	enum typec_power_role	 sc_power_role;
+	int			 sc_message_id;
+
+	uint32_t		*sc_source_pdos;
+	size_t			 sc_source_pdolen;
+	uint32_t		*sc_sink_pdos;
+	size_t			 sc_sink_pdolen;
+	struct pd_message	 sc_pd_message;
 
 	uint32_t		*sc_ss_sel;
 	uint8_t			 sc_cc;
@@ -182,6 +176,7 @@ int	 tcpci_intr(void *);
 void	 tcpci_task(void *);
 void	 tcpci_cc_change(struct tcpci_softc *);
 void	 tcpci_power_change(struct tcpci_softc *);
+void	 tcpci_rx_change(struct tcpci_softc *);
 void	 tcpci_set_polarity(struct tcpci_softc *, int);
 void	 tcpci_set_vbus(struct tcpci_softc *, int, int);
 void	 tcpci_set_roles(struct tcpci_softc *, enum typec_data_role,
@@ -191,6 +186,16 @@ void	 tcpci_write_reg16(struct tcpci_softc *, uint8_t, uint16_t);
 uint16_t tcpci_read_reg16(struct tcpci_softc *, uint8_t);
 void	 tcpci_write_reg8(struct tcpci_softc *, uint8_t, uint8_t);
 uint8_t	 tcpci_read_reg8(struct tcpci_softc *, uint8_t);
+void	 tcpci_write_block(struct tcpci_softc *, uint8_t, uint8_t *, size_t);
+void	 tcpci_read_block(struct tcpci_softc *, uint8_t, uint8_t *, size_t);
+
+void	 tcpci_send_message(struct tcpci_softc *, uint16_t, uint32_t *, size_t);
+void	 tcpci_send_message_hw(struct tcpci_softc *, struct pd_message *);
+void	 tcpci_send_source_caps(struct tcpci_softc *);
+void	 tcpci_send_sink_caps(struct tcpci_softc *);
+void	 tcpci_recv_message(struct tcpci_softc *, struct pd_message *);
+void	 tcpci_recv_data(struct tcpci_softc *, struct pd_message *);
+void	 tcpci_recv_ctrl(struct tcpci_softc *, struct pd_message *);
 
 struct cfattach tcpci_ca = {
 	sizeof(struct tcpci_softc),
@@ -249,6 +254,23 @@ tcpci_attach(struct device *parent, struct device *self, void *aux)
 		gpio_controller_set_pin(sc->sc_ss_sel, 1);
 	}
 
+	if (OF_child(sc->sc_node)) {
+		len = OF_getproplen(OF_child(sc->sc_node), "source-pdos");
+		if (len > 0) {
+			sc->sc_source_pdos = malloc(len, M_DEVBUF, M_WAITOK);
+			OF_getpropintarray(OF_child(sc->sc_node),
+			    "source-pdos", sc->sc_source_pdos, len);
+			sc->sc_source_pdolen = len;
+		}
+		len = OF_getproplen(OF_child(sc->sc_node), "sink-pdos");
+		if (len > 0) {
+			sc->sc_sink_pdos = malloc(len, M_DEVBUF, M_WAITOK);
+			OF_getpropintarray(OF_child(sc->sc_node),
+			    "sink-pdos", sc->sc_sink_pdos, len);
+			sc->sc_sink_pdolen = len;
+		}
+	}
+
 	tcpci_write_reg16(sc, TCPC_ALERT, 0xffff);
 	tcpci_write_reg8(sc, TCPC_FAULT_STATUS, 0x80);
 	tcpci_write_reg8(sc, TCPC_POWER_STATUS_MASK,
@@ -256,8 +278,7 @@ tcpci_attach(struct device *parent, struct device *self, void *aux)
 	tcpci_write_reg8(sc, TCPC_POWER_CTRL, tcpci_read_reg8(sc,
 	    TCPC_POWER_CTRL) & ~TCPC_POWER_CTRL_DIS_VOL_ALARM);
 	tcpci_write_reg16(sc, TCPC_ALERT_MASK,
-	    TCPC_ALERT_TX_SUCCESS | TCPC_ALERT_TX_FAILED |
-	    TCPC_ALERT_TX_DISCARDED | TCPC_ALERT_RX_STATUS |
+	    TCPC_ALERT_RX_STATUS |
 	    TCPC_ALERT_RX_HARD_RST | TCPC_ALERT_CC_STATUS |
 	    TCPC_ALERT_RX_BUF_OVF | TCPC_ALERT_FAULT |
 	    TCPC_ALERT_V_ALARM_LO | TCPC_ALERT_POWER_STATUS);
@@ -292,8 +313,11 @@ tcpci_task(void *args)
 	struct tcpci_softc *sc = args;
 	uint16_t status;
 
+	/* Only clear RX message once message was read. */
 	status = tcpci_read_reg16(sc, TCPC_ALERT);
-	tcpci_write_reg16(sc, TCPC_ALERT, status);
+	if (status & ~TCPC_ALERT_RX_STATUS)
+		tcpci_write_reg16(sc, TCPC_ALERT,
+		    status & ~TCPC_ALERT_RX_STATUS);
 
 	DPRINTF(("%s: alert %x\n", __func__, status));
 
@@ -302,6 +326,9 @@ tcpci_task(void *args)
 
 	if (status & TCPC_ALERT_POWER_STATUS)
 		tcpci_power_change(sc);
+
+	if (status & TCPC_ALERT_RX_STATUS)
+		tcpci_rx_change(sc);
 
 	if (status & TCPC_ALERT_V_ALARM_LO) {
 		tcpci_write_reg8(sc, TCPC_VBUS_VOLTAGE_ALARM_LO_CFG, 0);
@@ -312,6 +339,20 @@ tcpci_task(void *args)
 	if (status & TCPC_ALERT_FAULT)
 		tcpci_write_reg8(sc, TCPC_FAULT_STATUS, tcpci_read_reg8(sc,
 		    TCPC_FAULT_STATUS) | TCPC_FAULT_STATUS_CLEAR);
+
+#if 0
+	if (status & TCPC_ALERT_TX_SUCCESS) {
+		printf("%s: TX success\n", sc->sc_dev.dv_xname);
+		sc->sc_message_id = (sc->sc_message_id + 1) &
+		    PD_HEADER_ID_MASK;
+	} else if (status & TCPC_ALERT_TX_DISCARDED) {
+		printf("%s: TX discarded\n", sc->sc_dev.dv_xname);
+		tcpci_send_message_hw(sc, &sc->sc_pd_message);
+	} else if (status & TCPC_ALERT_TX_FAILED) {
+		printf("%s: TX failed\n", sc->sc_dev.dv_xname);
+		tcpci_send_message_hw(sc, &sc->sc_pd_message);
+	}
+#endif
 
 	fdt_intr_enable(sc->sc_ih);
 }
@@ -426,13 +467,19 @@ tcpci_cc_change(struct tcpci_softc *sc)
 	} else if (tcpci_cc_is_source(cc1, cc2)) {
 		/* Host */
 		DPRINTF(("%s: attached as source\n", __func__));
+		sc->sc_message_id = 0;
 		if (cc1 == TYPEC_CC_RD)
 			tcpci_set_polarity(sc, TYPEC_POLARITY_CC1);
 		else
 			tcpci_set_polarity(sc, TYPEC_POLARITY_CC2);
 		tcpci_set_roles(sc, TYPEC_HOST, TYPEC_SOURCE);
 		tcpci_write_reg8(sc, TCPC_RX_DETECT,
-		    TCPC_RX_DETECT_SOP | TCPC_RX_DETECT_HARD_RESET);
+		    TCPC_RX_DETECT_SOP |
+		    TCPC_RX_DETECT_SOP_PRIME |
+		    TCPC_RX_DETECT_SOP_PRIME_PRIME |
+		    TCPC_RX_DETECT_SOP_DEBUG_PRIME |
+		    TCPC_RX_DETECT_SOP_DEBUG_PRIME_PRIME |
+		    TCPC_RX_DETECT_HARD_RESET);
 		if ((cc1 == TYPEC_CC_RD && cc2 == TYPEC_CC_RA) ||
 		    (cc2 == TYPEC_CC_RD && cc1 == TYPEC_CC_RA))
 			tcpci_write_reg8(sc, TCPC_POWER_CTRL, tcpci_read_reg8(sc,
@@ -442,6 +489,7 @@ tcpci_cc_change(struct tcpci_softc *sc)
 	} else if (tcpci_cc_is_sink(cc1, cc2)) {
 		/* Device */
 		DPRINTF(("%s: attached as sink\n", __func__));
+		sc->sc_message_id = 0;
 		if (cc1 != TYPEC_CC_OPEN) {
 			tcpci_set_polarity(sc, TYPEC_POLARITY_CC1);
 			tcpci_write_reg8(sc, TCPC_ROLE_CTRL,
@@ -454,6 +502,13 @@ tcpci_cc_change(struct tcpci_softc *sc)
 			    TCPC_ROLE_CTRL_CC_RD << TCPC_ROLE_CTRL_CC2_SHIFT);
 		}
 		tcpci_set_roles(sc, TYPEC_DEVICE, TYPEC_SINK);
+		tcpci_write_reg8(sc, TCPC_RX_DETECT,
+		    TCPC_RX_DETECT_SOP |
+		    TCPC_RX_DETECT_SOP_PRIME |
+		    TCPC_RX_DETECT_SOP_PRIME_PRIME |
+		    TCPC_RX_DETECT_SOP_DEBUG_PRIME |
+		    TCPC_RX_DETECT_SOP_DEBUG_PRIME_PRIME |
+		    TCPC_RX_DETECT_HARD_RESET);
 		tcpci_set_vbus(sc, 0, 0);
 		sc->sc_attached = 1;
 	} else if (tcpci_cc_is_audio_detached(cc1, cc2)) {
@@ -481,6 +536,58 @@ tcpci_power_change(struct tcpci_softc *sc)
 
 	DPRINTF(("%s: power %d\n", __func__, power));
 	sc->sc_vbus_det = power;
+
+	if (power && sc->sc_data_role == TYPEC_HOST)
+		tcpci_send_source_caps(sc);
+}
+
+void
+tcpci_rx_change(struct tcpci_softc *sc)
+{
+	struct pd_message pd;
+	uint16_t ftype;
+	size_t len;
+	int i;
+
+	len = tcpci_read_reg8(sc, TCPC_RX_BYTE_CNT);
+	if (len < (1 + sizeof(pd.header))) {
+		printf("%s:%d: short message len %zu\n",
+		    __func__, __LINE__, len);
+		tcpci_write_reg16(sc, TCPC_ALERT,
+		    TCPC_ALERT_RX_STATUS);
+		return;
+	}
+	len -= (1 + sizeof(pd.header));
+
+	ftype = tcpci_read_reg8(sc, TCPC_RX_BUF_FRAME_TYPE);
+	ftype &= TCPC_RX_BUF_FRAME_TYPE_MASK;
+
+	pd.header = tcpci_read_reg16(sc, TCPC_RX_HDR);
+	if (len > sizeof(pd.payload)) {
+		printf("%s:%d: extended payload?\n",
+		    __func__, __LINE__);
+		tcpci_write_reg16(sc, TCPC_ALERT,
+		    TCPC_ALERT_RX_STATUS);
+		return;
+	}
+
+	tcpci_read_block(sc, TCPC_RX_DATA, (uint8_t *)&pd.payload, len);
+	tcpci_write_reg16(sc, TCPC_ALERT, TCPC_ALERT_RX_STATUS);
+
+	/* FIXME: validate len! */
+
+	pd.header = letoh16(pd.header);
+	for (i = 0; i < len / sizeof(uint32_t); i++)
+		pd.payload[i] = letoh32(pd.payload[i]);
+
+	printf("%s:%d: ftype %02x hdr %04x data", __func__, __LINE__,
+	    ftype, pd.header);
+	for (i = 0; i < len / sizeof(uint32_t); i++)
+		printf(" %02x", pd.payload[i]);
+	printf("\n");
+
+	if (ftype == TCPC_TX_SOP)
+		tcpci_recv_message(sc, &pd);
 }
 
 void
@@ -503,6 +610,9 @@ tcpci_set_roles(struct tcpci_softc *sc, enum typec_data_role data,
 	else
 		printf("%s: connected in device mode\n",
 		    sc->sc_dev.dv_xname);
+
+	sc->sc_data_role = data;
+	sc->sc_power_role = power;
 }
 
 void
@@ -601,4 +711,227 @@ tcpci_write_reg16(struct tcpci_softc *sc, uint8_t reg, uint16_t val)
 		    sc->sc_dev.dv_xname, reg);
 	}
 	iic_release_bus(sc->sc_tag, 0);
+}
+
+void
+tcpci_read_block(struct tcpci_softc *sc, uint8_t reg, uint8_t *data,
+    size_t len)
+{
+	iic_acquire_bus(sc->sc_tag, 0);
+	if (iic_exec(sc->sc_tag, I2C_OP_READ_WITH_STOP,
+	    sc->sc_addr, &reg, sizeof(reg), data, len, 0)) {
+		printf("%s: cannot read register 0x%x\n",
+		    sc->sc_dev.dv_xname, reg);
+	}
+	iic_release_bus(sc->sc_tag, 0);
+}
+
+void
+tcpci_write_block(struct tcpci_softc *sc, uint8_t reg, uint8_t *data,
+    size_t len)
+{
+	iic_acquire_bus(sc->sc_tag, 0);
+	if (iic_exec(sc->sc_tag, I2C_OP_WRITE_WITH_STOP,
+	    sc->sc_addr, &reg, sizeof(reg), data, len, 0)) {
+		printf("%s: cannot write register 0x%x\n",
+		    sc->sc_dev.dv_xname, reg);
+	}
+	iic_release_bus(sc->sc_tag, 0);
+}
+
+void
+tcpci_send_message(struct tcpci_softc *sc, uint16_t type,
+    uint32_t *payload, size_t nwords)
+{
+	struct pd_message pd;
+	int i;
+
+	KASSERT(nwords <= PD_PAYLOAD_MAX_LEN);
+
+	pd.header = type;
+	if (sc->sc_data_role == TYPEC_HOST)
+		pd.header |= PD_HEADER_DATA_ROLE;
+	if (sc->sc_power_role == TYPEC_SOURCE)
+		pd.header |= PD_HEADER_POWER_ROLE;
+	pd.header |= PD_REV20 << PD_HEADER_REV_SHIFT;
+	pd.header |= sc->sc_message_id << PD_HEADER_ID_SHIFT;
+	pd.header |= nwords << PD_HEADER_CNT_SHIFT;
+	if (0) /* more than max len */
+		pd.header |= PD_HEADER_EXT;
+
+	for (i = 0; i < nwords; i++)
+		pd.payload[i] = payload[i];
+
+	/* XXX: for retransmit */
+	memcpy(&sc->sc_pd_message, &pd, sizeof(pd));
+
+	tcpci_send_message_hw(sc, &pd);
+}
+
+void
+tcpci_send_message_hw(struct tcpci_softc *sc, struct pd_message *pd0)
+{
+	struct pd_message pd;
+	uint16_t cnt, type, status;
+	uint8_t ftype;
+	int i, retry = 20;
+
+	cnt = (pd0->header >> PD_HEADER_CNT_SHIFT) & PD_HEADER_CNT_MASK;
+	type = pd0->header & PD_HEADER_TYPE_MASK;
+
+	pd.header = htole16(pd0->header);
+	for (i = 0; i < cnt; i++)
+		pd.payload[i] = htole32(pd0->payload[i]);
+
+again:
+	retry--;
+	tcpci_write_reg8(sc, TCPC_TX_BYTE_CNT, sizeof(pd.header) +
+	    cnt * sizeof(uint32_t));
+	tcpci_write_reg16(sc, TCPC_TX_HDR, pd.header);
+	if (cnt)
+		tcpci_write_block(sc, TCPC_TX_DATA,
+		    (uint8_t *)pd.payload,
+		    cnt * sizeof(uint32_t));
+	ftype = TCPC_TX_SOP;
+	/* XXX: Vendor defined debug messages! */
+	if (cnt && type == PD_DATA_VENDOR_DEF &&
+	    sc->sc_data_role == TYPEC_HOST)
+		ftype = TCPC_TX_SOP_DEBUG_PRIME_PRIME;
+	tcpci_write_reg8(sc, TCPC_TRANSMIT, ftype |
+	    TCPC_TRANSMIT_RETRY_DEF);
+
+	for (i = 0; i < 1000; i++) {
+		status = tcpci_read_reg16(sc, TCPC_ALERT);
+		status &= (TCPC_ALERT_TX_SUCCESS |
+		    TCPC_ALERT_TX_DISCARDED | TCPC_ALERT_TX_FAILED);
+		if (status)
+			tcpci_write_reg16(sc, TCPC_ALERT, status);
+		if (status & TCPC_ALERT_TX_SUCCESS) {
+			printf("%s: TX success\n", sc->sc_dev.dv_xname);
+			sc->sc_message_id = (sc->sc_message_id + 1) &
+			    PD_HEADER_ID_MASK;
+			break;
+		} else if (status & TCPC_ALERT_TX_DISCARDED) {
+			printf("%s: TX discarded\n", sc->sc_dev.dv_xname);
+//			tcpci_send_message_hw(sc, &sc->sc_pd_message);
+			if (retry) {
+				delay(10 * 1000);
+				goto again;
+			}
+			break;
+		} else if (status & TCPC_ALERT_TX_FAILED) {
+			printf("%s: TX failed\n", sc->sc_dev.dv_xname);
+//			tcpci_send_message_hw(sc, &sc->sc_pd_message);
+			if (retry) {
+				delay(10 * 1000);
+				goto again;
+			}
+			break;
+		}
+		delay(10 * 1000);
+	}
+}
+
+void
+tcpci_send_source_caps(struct tcpci_softc *sc)
+{
+	if (sc->sc_source_pdos)
+		tcpci_send_message(sc, PD_DATA_SOURCE_CAP, sc->sc_source_pdos,
+		    sc->sc_source_pdolen / sizeof(uint32_t));
+	else
+		tcpci_send_message(sc, PD_CTRL_REJECT, NULL, 0);
+}
+
+void
+tcpci_send_sink_caps(struct tcpci_softc *sc)
+{
+	if (sc->sc_sink_pdos)
+		tcpci_send_message(sc, PD_DATA_SINK_CAP, sc->sc_sink_pdos,
+		    sc->sc_sink_pdolen / sizeof(uint32_t));
+	else
+		tcpci_send_message(sc, PD_CTRL_REJECT, NULL, 0);
+}
+
+void
+tcpci_recv_message(struct tcpci_softc *sc, struct pd_message *pd)
+{
+	if (pd->header & PD_HEADER_EXT)
+		printf("%s: extended message!\n", sc->sc_dev.dv_xname);
+	else if (pd->header & (PD_HEADER_CNT_MASK << PD_HEADER_CNT_SHIFT))
+		tcpci_recv_data(sc, pd);
+	else
+		tcpci_recv_ctrl(sc, pd);
+}
+
+void
+tcpci_recv_data(struct tcpci_softc *sc, struct pd_message *pd)
+{
+	uint16_t cnt, rev, type;
+
+	cnt = (pd->header >> PD_HEADER_CNT_SHIFT) & PD_HEADER_CNT_MASK;
+	rev = (pd->header >> PD_HEADER_REV_SHIFT) & PD_HEADER_REV_MASK;
+	type = pd->header & PD_HEADER_TYPE_MASK;
+
+	switch (type) {
+	case PD_DATA_SOURCE_CAP:
+		printf("%s: source cap\n", sc->sc_dev.dv_xname);
+		if (sc->sc_power_role != TYPEC_SINK)
+			break;
+		uint32_t pdo = (1 << 25) | (1 << 28);
+		tcpci_send_message(sc, PD_DATA_REQUEST, &pdo, 1);
+		break;
+	case PD_DATA_REQUEST:
+		printf("%s: request\n", sc->sc_dev.dv_xname);
+		if (sc->sc_power_role != TYPEC_SOURCE || cnt != 1 ||
+		    rev == PD_REV10) {
+			tcpci_send_message(sc, PD_CTRL_REJECT, NULL, 0);
+			break;
+		}
+		printf("%s: sink request %04x\n", sc->sc_dev.dv_xname,
+		    pd->payload[0]);
+		tcpci_send_message(sc, PD_CTRL_ACCEPT, NULL, 0);
+		tcpci_send_message(sc, PD_CTRL_PS_RDY, NULL, 0);
+//		uint32_t vdm[] = { 0x5ac8012, 0x0105, 0x8000<<16 };
+//		tcpci_send_message(sc, PD_DATA_VENDOR_DEF, vdm, 3);
+//		uint32_t vdm[] = { 0x5ac8012, 0x01840306 };
+		uint32_t vdm[] = { 0x5ac8012, 0x01820306 };
+//		uint32_t vdm[] = { 0x5ac8012, 0x01810306 };
+		tcpci_send_message(sc, PD_DATA_VENDOR_DEF, vdm, 2);
+		break;
+	default:
+		printf("%s: unknown type %02x\n",
+		    sc->sc_dev.dv_xname, type);
+		break;
+	}
+}
+
+void
+tcpci_recv_ctrl(struct tcpci_softc *sc, struct pd_message *pd)
+{
+	uint16_t type;
+
+	type = pd->header & PD_HEADER_TYPE_MASK;
+	switch (type) {
+	case PD_CTRL_ACCEPT:
+		printf("%s: accept\n", sc->sc_dev.dv_xname);
+		break;
+	case PD_CTRL_REJECT:
+		printf("%s: reject\n", sc->sc_dev.dv_xname);
+		break;
+	case PD_CTRL_PS_RDY:
+		printf("%s: ready\n", sc->sc_dev.dv_xname);
+		break;
+	case PD_CTRL_GET_SOURCE_CAP:
+		printf("%s: get source cap\n", sc->sc_dev.dv_xname);
+		tcpci_send_source_caps(sc);
+		break;
+	case PD_CTRL_GET_SINK_CAP:
+		printf("%s: get sink cap\n", sc->sc_dev.dv_xname);
+		tcpci_send_sink_caps(sc);
+		break;
+	default:
+		printf("%s: unknown type %02x\n",
+		    sc->sc_dev.dv_xname, type);
+		break;
+	}
 }

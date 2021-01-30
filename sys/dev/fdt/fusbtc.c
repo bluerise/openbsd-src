@@ -34,6 +34,8 @@
 #include <dev/ofw/ofw_pinctrl.h>
 #include <dev/ofw/ofw_regulator.h>
 
+#include <dev/usb/usbpd.h>
+
 /* #define FUSB_DEBUG */
 #define FUSB_DEBUG
 
@@ -147,30 +149,6 @@
 #define  FUSB_INTERRUPT_ACTIVITY			(1 << 6)
 #define  FUSB_INTERRUPT_VBUSOK				(1 << 7)
 #define FUSB_FIFOS				0x43
-
-enum typec_cc_status {
-	TYPEC_CC_OPEN,
-	TYPEC_CC_RA,
-	TYPEC_CC_RD,
-	TYPEC_CC_RP_DEF,
-	TYPEC_CC_RP_1_5,
-	TYPEC_CC_RP_3_0,
-};
-
-enum typec_data_role {
-	TYPEC_DEVICE,
-	TYPEC_HOST,
-};
-
-enum typec_power_role {
-	TYPEC_SINK,
-	TYPEC_SOURCE,
-};
-
-enum typec_polarity {
-	TYPEC_POLARITY_CC1,
-	TYPEC_POLARITY_CC2,
-};
 
 enum fusbtc_src_current_mode {
 	SRC_CURRENT_DEFAULT,

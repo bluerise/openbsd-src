@@ -754,7 +754,7 @@ smmu_domain_create(struct smmu_softc *sc, uint32_t sid)
 	    (1LL << iovabits) - 1, M_DEVBUF, NULL, 0, EX_WAITOK |
 	    EX_NOCOALESCE);
 
-#if 0
+#if 1
 	/* FIXME PCIe address space */
 	{
 #if 1

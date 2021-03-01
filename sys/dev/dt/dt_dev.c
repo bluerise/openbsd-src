@@ -56,6 +56,9 @@
 #if defined(__amd64__)
 #define DT_FA_PROFILE	5
 #define DT_FA_STATIC	2
+#elif defined(__arm64__)
+#define DT_FA_PROFILE	5
+#define DT_FA_STATIC	0
 #elif defined(__powerpc64__)
 #define DT_FA_PROFILE	6
 #define DT_FA_STATIC	2

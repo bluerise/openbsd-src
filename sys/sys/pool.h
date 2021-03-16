@@ -205,8 +205,6 @@ struct pool {
 	uint64_t	pr_cache_ngc;	/* # of times the gc released a list */
 	int		pr_cache_nout;
 
-	u_int		pr_align;
-	u_int		pr_maxcolors;	/* Cache coloring */
 	int		pr_phoffset;	/* Offset in page of page header */
 
 	/*

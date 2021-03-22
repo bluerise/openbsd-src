@@ -683,6 +683,16 @@ cpu_attach(struct device *parent, struct device *dev, void *aux)
 		/* Initialize debug registers. */
 		WRITE_SPECIALREG(mdscr_el1, DBG_MDSCR_TDCC);
 		WRITE_SPECIALREG(oslar_el1, 0);
+
+		{
+			WRITE_SPECIALREG(pmcntenclr_el0, ~0);
+			WRITE_SPECIALREG(pmintenclr_el1, ~0);
+			WRITE_SPECIALREG(pmovsclr_el0, ~0);
+			WRITE_SPECIALREG(pmcntenset_el0, 1U << 31);
+			WRITE_SPECIALREG(pmccfiltr_el0, 0);
+			__asm volatile("isb");
+			WRITE_SPECIALREG(pmcr_el0, PMCR_P | PMCR_C | PMCR_LC | PMCR_E);
+		}
 #ifdef MULTIPROCESSOR
 	}
 #endif
@@ -846,6 +856,16 @@ cpu_start_secondary(struct cpu_info *ci)
 	/* Initialize debug registers. */
 	WRITE_SPECIALREG(mdscr_el1, DBG_MDSCR_TDCC);
 	WRITE_SPECIALREG(oslar_el1, 0);
+
+	{
+		WRITE_SPECIALREG(pmcntenclr_el0, ~0);
+		WRITE_SPECIALREG(pmintenclr_el1, ~0);
+		WRITE_SPECIALREG(pmovsclr_el0, ~0);
+		WRITE_SPECIALREG(pmcntenset_el0, 1U << 31);
+		WRITE_SPECIALREG(pmccfiltr_el0, 0);
+		__asm volatile("isb");
+		WRITE_SPECIALREG(pmcr_el0, PMCR_P | PMCR_C | PMCR_LC | PMCR_E);
+	}
 
 	s = splhigh();
 	arm_intr_cpu_enable();

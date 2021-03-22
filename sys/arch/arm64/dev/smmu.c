@@ -21,6 +21,7 @@
 #include <sys/device.h>
 #include <sys/pool.h>
 #include <sys/atomic.h>
+#include <sys/kstat.h>
 
 #include <machine/bus.h>
 
@@ -123,11 +124,21 @@ struct cfdriver smmu_cd = {
 	NULL, "smmu", DV_DULL
 };
 
+#if 0
+uint64_t smmu_sync = 0;
+#endif
+
 int
 smmu_attach(struct smmu_softc *sc)
 {
 	uint32_t reg;
 	int i;
+
+#if 0
+	uint64_t tsc = READ_SPECIALREG(pmccntr_el0);
+	delay(1 * 1000 * 1000);
+	smmu_sync = READ_SPECIALREG(pmccntr_el0) - tsc;
+#endif
 
 	printf("\n");
 
@@ -394,17 +405,29 @@ void
 smmu_tlb_sync_context(struct smmu_domain *dom)
 {
 	struct smmu_softc *sc = dom->sd_sc;
+//	uint64_t tsc;
 	int i;
+
+//	tsc = READ_SPECIALREG(pmccntr_el0);
 
 	smmu_cb_write_4(sc, dom->sd_cb_idx, SMMU_CB_TLBSYNC, ~0);
 	for (i = 1000; i > 0; i--) {
 		if ((smmu_cb_read_4(sc, dom->sd_cb_idx, SMMU_CB_TLBSTATUS) &
 		    SMMU_CB_TLBSTATUS_SACTIVE) == 0)
-			return;
+			break;
+//			goto out;
 	}
 
 	printf("%s: context TLB sync timeout\n",
 	    sc->sc_dev.dv_xname);
+
+#if 0
+out:
+	if (dom->sd_ks) {
+		struct kstat_kv *kvs = dom->sd_ks->ks_data;
+		kstat_kv_u64(&kvs[0]) = READ_SPECIALREG(pmccntr_el0) - tsc;
+	}
+#endif
 }
 
 uint32_t
@@ -773,6 +796,28 @@ smmu_domain_create(struct smmu_softc *sc, uint32_t sid)
 #endif
 	}
 #endif
+
+	struct kstat_kv *kvs;
+
+	mtx_init(&dom->sd_kstat_mtx, IPL_SOFTCLOCK);
+
+	snprintf(dom->sd_kstat_name, sizeof(dom->sd_kstat_name), "%s.%x",
+	    sc->sc_dev.dv_xname, sid);
+	dom->sd_ks = kstat_create(dom->sd_kstat_name, 0, "smmu-stats", 0,
+	    KSTAT_T_KV, 0);
+	if (dom->sd_ks != NULL) {
+		kvs = mallocarray(1, sizeof(*kvs),
+		    M_DEVBUF, M_WAITOK|M_ZERO);
+		kstat_kv_unit_init(&kvs[0], "cpu",
+		    KSTAT_KV_T_COUNTER64, KSTAT_KV_U_CYCLES);
+
+		dom->sd_ks->ks_softc = sc;
+		dom->sd_ks->ks_data = kvs;
+		dom->sd_ks->ks_datalen = 1 * sizeof(*kvs);
+		kstat_set_mutex(dom->sd_ks, &dom->sd_kstat_mtx);
+
+		kstat_install(dom->sd_ks);
+	}
 
 	SIMPLEQ_INSERT_TAIL(&sc->sc_domains, dom, sd_list);
 	return dom;

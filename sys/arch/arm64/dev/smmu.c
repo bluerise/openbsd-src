@@ -37,6 +37,15 @@ struct smmu_map_state {
 	bus_addr_t		sms_dva;
 	bus_size_t		sms_len;
 	bus_size_t		sms_loaded;
+
+	/* bounce buffer */
+	int			sms_bounce;
+	bus_dmamap_t		sms_map;
+	bus_dma_segment_t	sms_seg;
+	int			sms_nseg;
+	size_t			sms_size;
+	caddr_t			sms_kva;
+	vaddr_t			*sms_used;
 };
 
 struct smmuvp0 {
@@ -118,6 +127,7 @@ int smmu_dmamap_load_uio(bus_dma_tag_t , bus_dmamap_t,
 int smmu_dmamap_load_raw(bus_dma_tag_t , bus_dmamap_t,
      bus_dma_segment_t *, int, bus_size_t, int);
 void smmu_dmamap_unload(bus_dma_tag_t , bus_dmamap_t);
+void smmu_dmamap_sync(bus_dma_tag_t, bus_dmamap_t, bus_addr_t, bus_size_t, int);
 
 struct cfdriver smmu_cd = {
 	NULL, "smmu", DV_DULL
@@ -522,6 +532,7 @@ smmu_device_map(void *cookie, uint32_t sid, bus_dma_tag_t dmat)
 		dom->sd_dmat->_dmamap_load_uio = smmu_dmamap_load_uio;
 		dom->sd_dmat->_dmamap_load_raw = smmu_dmamap_load_raw;
 		dom->sd_dmat->_dmamap_unload = smmu_dmamap_unload;
+		dom->sd_dmat->_dmamap_sync = smmu_dmamap_sync;
 		dom->sd_dmat->_flags |= BUS_DMA_COHERENT;
 	}
 
@@ -1210,7 +1221,12 @@ smmu_load_map(struct smmu_domain *dom, bus_dmamap_t map)
 {
 	struct smmu_map_state *sms = map->_dm_cookie;
 	u_long dva, maplen;
-	int seg;
+	paddr_t bpa;
+	int seg, used = 0;
+
+	if (sms->sms_bounce) {
+		bpa = sms->sms_map->dm_segs[0].ds_addr;
+	}
 
 	maplen = 0;
 	for (seg = 0; seg < map->dm_nsegs; seg++) {
@@ -1224,12 +1240,32 @@ smmu_load_map(struct smmu_domain *dom, bus_dmamap_t map)
 	for (seg = 0; seg < map->dm_nsegs; seg++) {
 		paddr_t pa = map->dm_segs[seg]._ds_paddr;
 		psize_t off = pa - trunc_page(pa);
-		u_long len = round_page(map->dm_segs[seg].ds_len + off);
+		u_long len = map->dm_segs[seg].ds_len + off;
 
 		map->dm_segs[seg].ds_addr = dva + off;
 
+		if (!sms->sms_bounce) {
+			pa = trunc_page(pa);
+			len = round_page(len);
+		}
+
+		/* Bounce unaligned start */
+		if (pa & PAGE_MASK) {
+//			smmu_map(dom, dva, bpa,
+			smmu_map(dom, dva, pa,
+			    PROT_READ | PROT_WRITE,
+			    PROT_READ | PROT_WRITE, PMAP_CACHE_WB);
+
+			dva += PAGE_SIZE;
+			pa += PAGE_SIZE;
+			bpa += PAGE_SIZE;
+			sms->sms_used[used++] = dva;
+			len &= ~PAGE_MASK;
+			sms->sms_loaded += PAGE_SIZE;
+		}
+
 		pa = trunc_page(pa);
-		while (len > 0) {
+		while (len >= PAGE_SIZE) {
 			smmu_map(dom, dva, pa,
 			    PROT_READ | PROT_WRITE,
 			    PROT_READ | PROT_WRITE, PMAP_CACHE_WB);
@@ -1237,6 +1273,21 @@ smmu_load_map(struct smmu_domain *dom, bus_dmamap_t map)
 			dva += PAGE_SIZE;
 			pa += PAGE_SIZE;
 			len -= PAGE_SIZE;
+			sms->sms_loaded += PAGE_SIZE;
+		}
+
+		/* Bounce unaligned end */
+		if (len > 0) {
+//			smmu_map(dom, dva, bpa,
+			smmu_map(dom, dva, pa,
+			    PROT_READ | PROT_WRITE,
+			    PROT_READ | PROT_WRITE, PMAP_CACHE_WB);
+
+			dva += PAGE_SIZE;
+			pa += PAGE_SIZE;
+			bpa += PAGE_SIZE;
+			sms->sms_used[used++] = dva;
+			len -= len;
 			sms->sms_loaded += PAGE_SIZE;
 		}
 	}
@@ -1249,9 +1300,13 @@ smmu_unload_map(struct smmu_domain *dom, bus_dmamap_t map)
 {
 	struct smmu_map_state *sms = map->_dm_cookie;
 	u_long len, dva;
+	int i;
 
 	if (sms->sms_loaded == 0)
 		return;
+
+	for (i = 0; i < (sms->sms_size / PAGE_SIZE); i++)
+		sms->sms_used[i] = 0;
 
 	dva = sms->sms_dva;
 	len = sms->sms_loaded;
@@ -1316,6 +1371,54 @@ smmu_dmamap_create(bus_dma_tag_t t, bus_size_t size, int nsegments,
 		len -= PAGE_SIZE;
 	}
 
+	if (flags & BUS_DMA_BOUNCE) {
+		sms->sms_size = 2 * nsegments * PAGE_SIZE;
+
+		error = bus_dmamap_create(sc->sc_dmat, sms->sms_size,
+		    1, sms->sms_size, 0, flags, &sms->sms_map);
+		if (error != 0) {
+			smmu_dmamap_destroy(t, map);
+			return error;
+		}
+
+		error = bus_dmamem_alloc(sc->sc_dmat, sms->sms_size,
+		    PAGE_SIZE, 0, &sms->sms_seg, 1, &sms->sms_nseg, flags);
+		if (error != 0) {
+			bus_dmamap_destroy(sc->sc_dmat, sms->sms_map);
+			smmu_dmamap_destroy(t, map);
+			return error;
+		}
+
+		error = bus_dmamem_map(sc->sc_dmat, &sms->sms_seg, sms->sms_nseg,
+		    sms->sms_size, &sms->sms_kva, flags);
+		if (error != 0) {
+			bus_dmamem_free(sc->sc_dmat, &sms->sms_seg, sms->sms_nseg);
+			smmu_dmamap_destroy(t, map);
+			return error;
+		}
+
+		error = bus_dmamap_load(sc->sc_dmat, sms->sms_map, sms->sms_kva,
+		    sms->sms_size, NULL, flags);
+		if (error != 0) {
+			bus_dmamem_unmap(sc->sc_dmat, sms->sms_kva, sms->sms_size);
+			bus_dmamem_free(sc->sc_dmat, &sms->sms_seg, sms->sms_nseg);
+			smmu_dmamap_destroy(t, map);
+			return error;
+		}
+
+		sms->sms_used = malloc((sms->sms_size / PAGE_SIZE) * sizeof(vaddr_t), M_DEVBUF,
+		    (flags & BUS_DMA_NOWAIT) ?  (M_NOWAIT|M_ZERO) : (M_WAITOK|M_ZERO));
+		if (sms->sms_used == NULL) {
+			bus_dmamap_unload(sc->sc_dmat, sms->sms_map);
+			bus_dmamem_unmap(sc->sc_dmat, sms->sms_kva, sms->sms_size);
+			bus_dmamem_free(sc->sc_dmat, &sms->sms_seg, sms->sms_nseg);
+			smmu_dmamap_destroy(t, map);
+			return error;
+		}
+
+		sms->sms_bounce = 1;
+	}
+
 	map->_dm_cookie = sms;
 	*dmamap = map;
 	return 0;
@@ -1340,6 +1443,14 @@ smmu_dmamap_destroy(bus_dma_tag_t t, bus_dmamap_t map)
 		smmu_remove(dom, dva);
 		dva += PAGE_SIZE;
 		len -= PAGE_SIZE;
+	}
+
+	if (sms->sms_bounce) {
+		free(sms->sms_used, M_DEVBUF, (sms->sms_size / PAGE_SIZE) * sizeof(vaddr_t));
+		bus_dmamap_unload(sc->sc_dmat, sms->sms_map);
+		bus_dmamem_unmap(sc->sc_dmat, sms->sms_kva, sms->sms_size);
+		bus_dmamem_free(sc->sc_dmat, &sms->sms_seg, sms->sms_nseg);
+		bus_dmamap_destroy(sc->sc_dmat, sms->sms_map);
 	}
 
 	mtx_enter(&dom->sd_iova_mtx);
@@ -1440,4 +1551,97 @@ smmu_dmamap_unload(bus_dma_tag_t t, bus_dmamap_t map)
 
 	smmu_unload_map(dom, map);
 	sc->sc_dmat->_dmamap_unload(sc->sc_dmat, map);
+}
+
+void
+smmu_dmamap_sync_segment(bus_dma_tag_t t, bus_dmamap_t map, vaddr_t va,
+    paddr_t pa, vsize_t len, int ops)
+{
+	struct smmu_map_state *sms = map->_dm_cookie;
+	bus_addr_t offset;
+	size_t seglen;
+	int i;
+
+	for (i = 0; i < (sms->sms_size / PAGE_SIZE); i++) {
+		if (sms->sms_used[i] == trunc_page(pa)) {
+			break;
+		}
+	}
+
+	offset = pa - trunc_page(pa);
+	seglen = min(len, PAGE_SIZE - offset);
+
+	if (i < (sms->sms_size / PAGE_SIZE))
+		printf("%s: memcpy va 0x%lx <=> 0x%p (0x%zx)\n", __func__,
+		    va + offset, sms->sms_kva + i * PAGE_SIZE + offset,
+		    seglen);
+
+	len -= seglen;
+	va += seglen;
+	pa += seglen;
+
+	while (len >= PAGE_SIZE) {
+		len -= PAGE_SIZE;
+		va += PAGE_SIZE;
+		pa += PAGE_SIZE;
+	}
+
+	if (len <= 0)
+		return;
+
+	for (i = 0; i < (sms->sms_size / PAGE_SIZE); i++) {
+		if (sms->sms_used[i] == trunc_page(pa)) {
+			break;
+		}
+	}
+
+	offset = 0;
+	seglen = len;
+
+	if (i < (sms->sms_size / PAGE_SIZE))
+		printf("%s: memcpy va 0x%lx <=> 0x%p (0x%zx)\n", __func__,
+		    va + offset, sms->sms_kva + i * PAGE_SIZE + offset,
+		    seglen);
+}
+
+void
+smmu_dmamap_sync(bus_dma_tag_t t, bus_dmamap_t map, bus_addr_t addr,
+    bus_size_t size, int op)
+{
+	struct smmu_domain *dom = t->_cookie;
+	struct smmu_softc *sc = dom->sd_sc;
+	struct smmu_map_state *sms = map->_dm_cookie;
+	bus_dma_segment_t *ds = map->dm_segs;
+	bus_addr_t offset;
+	bus_size_t len;
+
+	if (!sms->sms_bounce) {
+		sc->sc_dmat->_dmamap_sync(sc->sc_dmat, map, addr, size, op);
+		return;
+	}
+
+	offset = addr;
+	len = size;
+	while (len > 0) {
+		while (offset >= ds->ds_len) {
+			offset -= ds->ds_len;
+			ds++;
+		}
+
+		vaddr_t va = ds->_ds_vaddr + offset;
+		paddr_t pa = ds->ds_addr + offset;
+		size_t seglen = min(len, ds->ds_len - offset);
+
+		paddr_t dstart = ds->ds_addr;
+		paddr_t dend = ds->ds_addr + ds->ds_len;
+
+		/* This segment is definitely bounced */
+		if ((dstart & PAGE_MASK) || (dend & PAGE_MASK))
+			smmu_dmamap_sync_segment(t, map, va, pa, seglen, op);
+
+		offset += seglen;
+		len -= seglen;
+	}
+
+	sc->sc_dmat->_dmamap_sync(sc->sc_dmat, map, offset, size, op);
 }

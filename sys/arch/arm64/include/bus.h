@@ -335,6 +335,7 @@ bus_space_barrier(bus_space_tag_t t, bus_space_handle_t h, bus_size_t offset,
 #define	BUS_DMA_ZERO		0x0800	/* zero memory in dmamem_alloc */
 #define	BUS_DMA_NOCACHE		0x1000
 #define	BUS_DMA_64BIT		0x2000	/* device handles 64bit dva */
+#define	BUS_DMA_BOUNCE		0x4000
 
 /* Forwards needed by prototypes below. */
 struct mbuf;

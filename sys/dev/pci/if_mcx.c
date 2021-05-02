@@ -7108,7 +7108,7 @@ mcx_queue_up(struct mcx_softc *sc, struct mcx_queues *q)
 		ms = &rx->rx_slots[i];
 		if (bus_dmamap_create(sc->sc_dmat, sc->sc_hardmtu, 1,
 		    sc->sc_hardmtu, 0,
-		    BUS_DMA_WAITOK | BUS_DMA_ALLOCNOW | BUS_DMA_64BIT,
+		    BUS_DMA_WAITOK | BUS_DMA_ALLOCNOW | BUS_DMA_64BIT | BUS_DMA_BOUNCE,
 		    &ms->ms_map) != 0) {
 			printf("%s: failed to allocate rx dma maps\n",
 			    DEVNAME(sc));

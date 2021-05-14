@@ -52,6 +52,7 @@ struct smmu_map_state {
 	bus_size_t		sms_len;
 	bus_size_t		sms_loaded;
 	uint64_t		sms_cycles;
+	uint64_t		sms_synced;
 
 	/* copy buffer */
 	int			sms_bounce;
@@ -1300,11 +1301,11 @@ void
 smmu_unload_map(struct smmu_domain *dom, bus_dmamap_t map)
 {
 	struct smmu_map_state *sms = map->_dm_cookie;
-	uint64_t tsc;
 	u_long len, dva;
 
 	if (sms->sms_loaded == 0) {
 		sms->sms_cycles = 0;
+		sms->sms_synced = 0;
 		return;
 	}
 
@@ -1318,13 +1319,12 @@ smmu_unload_map(struct smmu_domain *dom, bus_dmamap_t map)
 		len -= PAGE_SIZE;
 	}
 
-	tsc = READ_SPECIALREG(pmccntr_el0);
 	smmu_tlb_sync_context(dom);
-	tsc = READ_SPECIALREG(pmccntr_el0) - tsc;
-	TRACEPOINT(smmu, unload_map, dom->sd_sid, sms->sms_loaded, tsc + sms->sms_cycles);
+	TRACEPOINT(smmu, unload_map, dom->sd_sid, sms->sms_synced, sms->sms_cycles);
 
 	sms->sms_loaded = 0;
 	sms->sms_cycles = 0;
+	sms->sms_synced = 0;
 }
 
 int
@@ -1376,7 +1376,7 @@ smmu_dmamap_create(bus_dma_tag_t t, bus_size_t size, int nsegments,
 	}
 
 	if (flags & BUS_DMA_BOUNCE) {
-		sms->sms_size = PAGE_SIZE;
+		sms->sms_size = 8 * PAGE_SIZE;
 
 		error = bus_dmamap_create(sc->sc_dmat, sms->sms_size,
 		    1, sms->sms_size, 0, flags, &sms->sms_map);
@@ -1467,6 +1467,8 @@ smmu_dmamap_load(bus_dma_tag_t t, bus_dmamap_t map, void *buf,
 	return error;
 }
 
+uint64_t smmu_copy = 0;
+
 int
 smmu_dmamap_load_mbuf(bus_dma_tag_t t, bus_dmamap_t map, struct mbuf *m0,
     int flags)
@@ -1474,6 +1476,8 @@ smmu_dmamap_load_mbuf(bus_dma_tag_t t, bus_dmamap_t map, struct mbuf *m0,
 	struct smmu_domain *dom = t->_cookie;
 	struct smmu_softc *sc = dom->sd_sc;
 	int error;
+
+	smmu_copy = 1;
 
 	error = sc->sc_dmat->_dmamap_load_mbuf(sc->sc_dmat, map,
 	    m0, flags);
@@ -1549,10 +1553,11 @@ smmu_dmamap_sync(bus_dma_tag_t t, bus_dmamap_t map, bus_addr_t addr,
 	KASSERT(t->_flags & BUS_DMA_COHERENT);
 	membar_sync();
 
-	if (sms->sms_bounce) {
+	if (sms->sms_bounce && smmu_copy) {
+		sms->sms_synced += size;
 		tsc = READ_SPECIALREG(pmccntr_el0);
 		while (size) {
-			memcpy(sms->sms_kva, sms->sms_kva+ (sms->sms_size / 2),
+			memcpy(sms->sms_kva, sms->sms_kva + (sms->sms_size / 2),
 			    min(sms->sms_size / 2, size));
 			size -= min(sms->sms_size / 2, size);
 		}

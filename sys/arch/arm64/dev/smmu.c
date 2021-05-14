@@ -124,21 +124,17 @@ struct cfdriver smmu_cd = {
 	NULL, "smmu", DV_DULL
 };
 
-#if 0
-uint64_t smmu_sync = 0;
-#endif
-
 int
 smmu_attach(struct smmu_softc *sc)
 {
+	uint64_t tsc;
 	uint32_t reg;
 	int i;
 
-#if 0
-	uint64_t tsc = READ_SPECIALREG(pmccntr_el0);
+	tsc = READ_SPECIALREG(pmccntr_el0);
 	delay(1 * 1000 * 1000);
-	smmu_sync = READ_SPECIALREG(pmccntr_el0) - tsc;
-#endif
+	tsc = READ_SPECIALREG(pmccntr_el0) - tsc;
+	printf(": 1s = %llu cycles", tsc);
 
 	printf("\n");
 
@@ -390,6 +386,8 @@ smmu_tlb_sync_global(struct smmu_softc *sc)
 {
 	int i;
 
+	/* TODO: lock */
+
 	smmu_gr0_write_4(sc, SMMU_STLBGSYNC, ~0);
 	for (i = 1000; i > 0; i--) {
 		if ((smmu_gr0_read_4(sc, SMMU_STLBGSTATUS) &
@@ -405,29 +403,35 @@ void
 smmu_tlb_sync_context(struct smmu_domain *dom)
 {
 	struct smmu_softc *sc = dom->sd_sc;
-//	uint64_t tsc;
+	uint64_t tsc;
 	int i;
 
-//	tsc = READ_SPECIALREG(pmccntr_el0);
+	tsc = READ_SPECIALREG(pmccntr_el0);
+
+	mtx_enter(&dom->sd_tlb_mtx);
 
 	smmu_cb_write_4(sc, dom->sd_cb_idx, SMMU_CB_TLBSYNC, ~0);
 	for (i = 1000; i > 0; i--) {
 		if ((smmu_cb_read_4(sc, dom->sd_cb_idx, SMMU_CB_TLBSTATUS) &
 		    SMMU_CB_TLBSTATUS_SACTIVE) == 0)
-			break;
-//			goto out;
+			goto out;
 	}
 
+#if 0
 	printf("%s: context TLB sync timeout\n",
 	    sc->sc_dev.dv_xname);
+#endif
+	if (dom->sd_ks) {
+		struct kstat_kv *kvs = dom->sd_ks->ks_data;
+		kstat_kv_u64(&kvs[1]) += 1;
+	}
 
-#if 0
 out:
+	mtx_leave(&dom->sd_tlb_mtx);
 	if (dom->sd_ks) {
 		struct kstat_kv *kvs = dom->sd_ks->ks_data;
 		kstat_kv_u64(&kvs[0]) = READ_SPECIALREG(pmccntr_el0) - tsc;
 	}
-#endif
 }
 
 uint32_t
@@ -582,6 +586,7 @@ smmu_domain_create(struct smmu_softc *sc, uint32_t sid)
 	dom = malloc(sizeof(*dom), M_DEVBUF, M_WAITOK | M_ZERO);
 	mtx_init(&dom->sd_iova_mtx, IPL_VM);
 	mtx_init(&dom->sd_pmap_mtx, IPL_VM);
+	mtx_init(&dom->sd_tlb_mtx, IPL_VM);
 	dom->sd_sc = sc;
 	dom->sd_sid = sid;
 
@@ -810,14 +815,16 @@ smmu_domain_create(struct smmu_softc *sc, uint32_t sid)
 	dom->sd_ks = kstat_create(dom->sd_kstat_name, 0, "smmu-stats", 0,
 	    KSTAT_T_KV, 0);
 	if (dom->sd_ks != NULL) {
-		kvs = mallocarray(1, sizeof(*kvs),
+		kvs = mallocarray(2, sizeof(*kvs),
 		    M_DEVBUF, M_WAITOK|M_ZERO);
-		kstat_kv_unit_init(&kvs[0], "cpu",
+		kstat_kv_unit_init(&kvs[0], "sync",
 		    KSTAT_KV_T_COUNTER64, KSTAT_KV_U_CYCLES);
+		kstat_kv_unit_init(&kvs[1], "context timeout",
+		    KSTAT_KV_T_COUNTER64, KSTAT_KV_U_NONE);
 
 		dom->sd_ks->ks_softc = sc;
 		dom->sd_ks->ks_data = kvs;
-		dom->sd_ks->ks_datalen = 1 * sizeof(*kvs);
+		dom->sd_ks->ks_datalen = 2 * sizeof(*kvs);
 		kstat_set_mutex(dom->sd_ks, &dom->sd_kstat_mtx);
 
 		kstat_install(dom->sd_ks);

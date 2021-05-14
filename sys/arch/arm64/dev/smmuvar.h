@@ -35,6 +35,7 @@ struct smmu_domain {
 	} sd_vp;
 	struct mutex			 sd_iova_mtx;
 	struct mutex			 sd_pmap_mtx;
+	struct mutex			 sd_tlb_mtx;
 	SIMPLEQ_ENTRY(smmu_domain)	 sd_list;
 };
 

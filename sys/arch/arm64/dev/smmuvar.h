@@ -18,15 +18,12 @@
 struct smmu_softc;
 struct smmu_domain {
 	struct smmu_softc		*sd_sc;
-	struct kstat			*sd_ks;
 	uint32_t			 sd_sid;
 	bus_dma_tag_t			 sd_dmat;
 	int				 sd_cb_idx;
 	int				 sd_smr_idx;
 	int				 sd_stage;
 	int				 sd_4level;
-	struct mutex			 sd_kstat_mtx;
-	char				 sd_kstat_name[32];
 	char				 sd_exname[32];
 	struct extent			*sd_iovamap;
 	union {

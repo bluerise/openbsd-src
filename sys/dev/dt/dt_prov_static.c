@@ -69,6 +69,11 @@ DT_STATIC_PROBE3(vfs, bufcache_take, "long", "int", "int64_t");
 DT_STATIC_PROBE4(vfs, cleaner, "long", "int", "long", "long");
 
 /*
+ * SMMU
+ */
+DT_STATIC_PROBE3(smmu, unload_map, "int", "size_t", "long");
+
+/*
  * List of all static probes
  */
 struct dt_probe *dtps_static[] = {
@@ -95,6 +100,8 @@ struct dt_probe *dtps_static[] = {
 	&_DT_STATIC_P(vfs, bufcache_rel),
 	&_DT_STATIC_P(vfs, bufcache_take),
 	&_DT_STATIC_P(vfs, cleaner),
+	/* SMMU */
+	&_DT_STATIC_P(smmu, unload_map),
 };
 
 int

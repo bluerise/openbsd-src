@@ -60,7 +60,7 @@ struct smmu_map_state {
 	int			sms_nseg;
 	size_t			sms_size;
 	caddr_t			sms_kva;
-	vaddr_t			*sms_used;
+	vaddr_t			sms_used[8];
 };
 
 struct smmuvp0 {
@@ -1456,16 +1456,6 @@ smmu_dmamap_create(bus_dma_tag_t t, bus_size_t size, int nsegments,
 			return error;
 		}
 
-		sms->sms_used = malloc((sms->sms_size / PAGE_SIZE) * sizeof(vaddr_t), M_DEVBUF,
-		    (flags & BUS_DMA_NOWAIT) ? M_NOWAIT : M_WAITOK);
-		if (sms->sms_used == NULL) {
-			bus_dmamap_unload(sc->sc_dmat, sms->sms_map);
-			bus_dmamem_unmap(sc->sc_dmat, sms->sms_kva, sms->sms_size);
-			bus_dmamem_free(sc->sc_dmat, &sms->sms_seg, sms->sms_nseg);
-			bus_dmamap_destroy(sc->sc_dmat, sms->sms_map);
-			smmu_dmamap_destroy(t, map);
-			return ENOMEM;
-		}
 		memset(sms->sms_used, -1, (sms->sms_size / PAGE_SIZE) * sizeof(vaddr_t));
 
 		sms->sms_bounce = 1;
@@ -1498,7 +1488,6 @@ smmu_dmamap_destroy(bus_dma_tag_t t, bus_dmamap_t map)
 	}
 
 	if (sms->sms_bounce) {
-		free(sms->sms_used, M_DEVBUF, (sms->sms_size / PAGE_SIZE) * sizeof(vaddr_t));
 		bus_dmamap_unload(sc->sc_dmat, sms->sms_map);
 		bus_dmamem_unmap(sc->sc_dmat, sms->sms_kva, sms->sms_size);
 		bus_dmamem_free(sc->sc_dmat, &sms->sms_seg, sms->sms_nseg);
@@ -1652,17 +1641,9 @@ void
 smmu_dmamap_sync_bounce(bus_dma_tag_t t, bus_dmamap_t map, bus_addr_t addr,
     bus_size_t size, int ops)
 {
-	struct smmu_domain *dom = t->_cookie;
-	struct smmu_softc *sc = dom->sd_sc;
 	bus_dma_segment_t *ds = map->dm_segs;
 	bus_addr_t offset;
 	bus_size_t len;
-
-	/*
-	 * XXX If we call this for each segment, it will have to loop
-	 * XXX over all segments on each call, so, just do it once.
-	 */
-	sc->sc_dmat->_dmamap_sync(sc->sc_dmat, map, addr, size, ops);
 
 	offset = addr;
 	len = size;
@@ -1702,14 +1683,13 @@ void
 smmu_dmamap_sync(bus_dma_tag_t t, bus_dmamap_t map, bus_addr_t addr,
     bus_size_t size, int ops)
 {
-	struct smmu_domain *dom = t->_cookie;
-	struct smmu_softc *sc = dom->sd_sc;
 	struct smmu_map_state *sms = map->_dm_cookie;
 
 	KASSERT(sms->sms_loaded);
 
-	if (sms->sms_bounce)
-		return smmu_dmamap_sync_bounce(t, map, addr, size, ops);
+	KASSERT(t->_flags & BUS_DMA_COHERENT);
+	membar_sync();
 
-	return sc->sc_dmat->_dmamap_sync(sc->sc_dmat, map, addr, size, ops);
+	if (sms->sms_bounce)
+		smmu_dmamap_sync_bounce(t, map, addr, size, ops);
 }

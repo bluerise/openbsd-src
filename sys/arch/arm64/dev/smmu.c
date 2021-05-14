@@ -1441,6 +1441,7 @@ smmu_dmamap_create(bus_dma_tag_t t, bus_size_t size, int nsegments,
 		    sms->sms_size, &sms->sms_kva, flags);
 		if (error != 0) {
 			bus_dmamem_free(sc->sc_dmat, &sms->sms_seg, sms->sms_nseg);
+			bus_dmamap_destroy(sc->sc_dmat, sms->sms_map);
 			smmu_dmamap_destroy(t, map);
 			return error;
 		}
@@ -1450,6 +1451,7 @@ smmu_dmamap_create(bus_dma_tag_t t, bus_size_t size, int nsegments,
 		if (error != 0) {
 			bus_dmamem_unmap(sc->sc_dmat, sms->sms_kva, sms->sms_size);
 			bus_dmamem_free(sc->sc_dmat, &sms->sms_seg, sms->sms_nseg);
+			bus_dmamap_destroy(sc->sc_dmat, sms->sms_map);
 			smmu_dmamap_destroy(t, map);
 			return error;
 		}
@@ -1460,6 +1462,7 @@ smmu_dmamap_create(bus_dma_tag_t t, bus_size_t size, int nsegments,
 			bus_dmamap_unload(sc->sc_dmat, sms->sms_map);
 			bus_dmamem_unmap(sc->sc_dmat, sms->sms_kva, sms->sms_size);
 			bus_dmamem_free(sc->sc_dmat, &sms->sms_seg, sms->sms_nseg);
+			bus_dmamap_destroy(sc->sc_dmat, sms->sms_map);
 			smmu_dmamap_destroy(t, map);
 			return ENOMEM;
 		}

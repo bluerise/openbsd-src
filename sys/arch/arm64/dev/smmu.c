@@ -51,6 +51,8 @@ struct smmu_map_state {
 	bus_addr_t		sms_dva;
 	bus_size_t		sms_len;
 	bus_size_t		sms_loaded;
+	uint64_t		sms_cycles;
+	uint64_t		sms_synced;
 };
 
 struct smmuvp0 {
@@ -132,6 +134,7 @@ int smmu_dmamap_load_uio(bus_dma_tag_t , bus_dmamap_t,
 int smmu_dmamap_load_raw(bus_dma_tag_t , bus_dmamap_t,
      bus_dma_segment_t *, int, bus_size_t, int);
 void smmu_dmamap_unload(bus_dma_tag_t , bus_dmamap_t);
+void smmu_dmamap_sync(bus_dma_tag_t, bus_dmamap_t, bus_addr_t, bus_size_t, int);
 
 struct cfdriver smmu_cd = {
 	NULL, "smmu", DV_DULL
@@ -553,6 +556,7 @@ smmu_device_map(void *cookie, uint32_t sid, bus_dma_tag_t dmat)
 		dom->sd_dmat->_dmamap_load_uio = smmu_dmamap_load_uio;
 		dom->sd_dmat->_dmamap_load_raw = smmu_dmamap_load_raw;
 		dom->sd_dmat->_dmamap_unload = smmu_dmamap_unload;
+		dom->sd_dmat->_dmamap_sync = smmu_dmamap_sync;
 		dom->sd_dmat->_flags |= BUS_DMA_COHERENT;
 	}
 
@@ -1292,8 +1296,11 @@ smmu_unload_map(struct smmu_domain *dom, bus_dmamap_t map)
 	uint64_t tsc;
 	u_long len, dva;
 
-	if (sms->sms_loaded == 0)
+	if (sms->sms_loaded == 0) {
+		sms->sms_cycles = 0;
+		sms->sms_synced = 0;
 		return;
+	}
 
 	dva = sms->sms_dva;
 	len = sms->sms_loaded;
@@ -1308,9 +1315,11 @@ smmu_unload_map(struct smmu_domain *dom, bus_dmamap_t map)
 	tsc = READ_SPECIALREG(pmccntr_el0);
 	smmu_tlb_sync_context(dom);
 	tsc = READ_SPECIALREG(pmccntr_el0) - tsc;
-	TRACEPOINT(smmu, unload_map, dom->sd_sid, sms->sms_loaded, tsc);
+	TRACEPOINT(smmu, unload_map, dom->sd_sid, sms->sms_synced, tsc + sms->sms_cycles);
 
 	sms->sms_loaded = 0;
+	sms->sms_cycles = 0;
+	sms->sms_synced = 0;
 }
 
 int
@@ -1485,4 +1494,18 @@ smmu_dmamap_unload(bus_dma_tag_t t, bus_dmamap_t map)
 
 	smmu_unload_map(dom, map);
 	sc->sc_dmat->_dmamap_unload(sc->sc_dmat, map);
+}
+
+void
+smmu_dmamap_sync(bus_dma_tag_t t, bus_dmamap_t map, bus_addr_t addr,
+    bus_size_t size, int ops)
+{
+	struct smmu_map_state *sms = map->_dm_cookie;
+
+	KASSERT(sms->sms_loaded);
+
+	KASSERT(t->_flags & BUS_DMA_COHERENT);
+	membar_sync();
+
+	sms->sms_synced += size;
 }

@@ -758,6 +758,15 @@ smmu_domain_create(struct smmu_softc *sc, uint32_t sid)
 	/* FIXME PCIe address space */
 	{
 #if 1
+		/* Reserve LX2K PCI address space */
+		extent_alloc_region(dom->sd_iovamap, 0x40000000, 0xC0000000,
+		    EX_WAITOK);
+		extent_alloc_region(dom->sd_iovamap, 0x9400000000, 0x400000000,
+		    EX_WAITOK);
+		extent_alloc_region(dom->sd_iovamap, 0xA400000000, 0x400000000,
+		    EX_WAITOK);
+#endif
+#if 0
 		/* Reserve 8040 PCI address space */
 		extent_alloc_region(dom->sd_iovamap, 0xc0000000, 0x20000000,
 		    EX_WAITOK);

@@ -52,6 +52,7 @@ struct smmu_map_state {
 	bus_size_t		sms_len;
 	bus_size_t		sms_loaded;
 	uint64_t		sms_cycles;
+	uint64_t		sms_synced;
 
 	/* bounce buffer */
 	int			sms_bounce;
@@ -1345,6 +1346,7 @@ smmu_unload_map(struct smmu_domain *dom, bus_dmamap_t map)
 
 	if (sms->sms_loaded == 0) {
 		sms->sms_cycles = 0;
+		sms->sms_synced = 0;
 		return;
 	}
 
@@ -1363,10 +1365,11 @@ smmu_unload_map(struct smmu_domain *dom, bus_dmamap_t map)
 	tsc = READ_SPECIALREG(pmccntr_el0);
 	smmu_tlb_sync_context(dom);
 	tsc = READ_SPECIALREG(pmccntr_el0) - tsc;
-	TRACEPOINT(smmu, unload_map, dom->sd_sid, sms->sms_loaded, tsc + sms->sms_cycles);
+	TRACEPOINT(smmu, unload_map, dom->sd_sid, sms->sms_synced, tsc + sms->sms_cycles);
 
 	sms->sms_loaded = 0;
 	sms->sms_cycles = 0;
+	sms->sms_synced = 0;
 }
 
 int
@@ -1692,4 +1695,6 @@ smmu_dmamap_sync(bus_dma_tag_t t, bus_dmamap_t map, bus_addr_t addr,
 
 	if (sms->sms_bounce)
 		smmu_dmamap_sync_bounce(t, map, addr, size, ops);
+
+	sms->sms_synced += size;
 }

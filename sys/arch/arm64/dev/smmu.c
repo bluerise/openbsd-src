@@ -21,7 +21,7 @@
 #include <sys/device.h>
 #include <sys/pool.h>
 #include <sys/atomic.h>
-#include <sys/kstat.h>
+#include <sys/tracepoint.h>
 
 #include <machine/bus.h>
 
@@ -427,14 +427,8 @@ smmu_tlb_sync_context(struct smmu_domain *dom)
 			goto out;
 	}
 
-#if 0
 	printf("%s: context TLB sync timeout\n",
 	    sc->sc_dev.dv_xname);
-#endif
-	if (dom->sd_ks) {
-		struct kstat_kv *kvs = dom->sd_ks->ks_data;
-		kstat_kv_u64(&kvs[SMMU_KSTAT_TLB_SYNC_TIMEOUT]) += 1;
-	}
 
 out:
 	mtx_leave(&dom->sd_tlb_mtx);
@@ -811,59 +805,6 @@ smmu_domain_create(struct smmu_softc *sc, uint32_t sid)
 #endif
 	}
 #endif
-
-	struct kstat_kv *kvs;
-
-	mtx_init(&dom->sd_kstat_mtx, IPL_SOFTCLOCK);
-
-	snprintf(dom->sd_kstat_name, sizeof(dom->sd_kstat_name), "%s.%x",
-	    sc->sc_dev.dv_xname, sid);
-	dom->sd_ks = kstat_create(dom->sd_kstat_name, 0, "smmu-stats", 0,
-	    KSTAT_T_KV, 0);
-	if (dom->sd_ks != NULL) {
-		kvs = mallocarray(SMMU_KSTAT_MAX, sizeof(*kvs),
-		    M_DEVBUF, M_WAITOK|M_ZERO);
-		kstat_kv_unit_init(&kvs[SMMU_KSTAT_TLB_SYNC_0],
-		    "TLB sync 0",
-		    KSTAT_KV_T_COUNTER64, KSTAT_KV_U_CYCLES);
-		kstat_kv_unit_init(&kvs[SMMU_KSTAT_TLB_SYNC_128],
-		    "TLB sync 128",
-		    KSTAT_KV_T_COUNTER64, KSTAT_KV_U_CYCLES);
-		kstat_kv_unit_init(&kvs[SMMU_KSTAT_TLB_SYNC_512],
-		    "TLB sync 512",
-		    KSTAT_KV_T_COUNTER64, KSTAT_KV_U_CYCLES);
-		kstat_kv_unit_init(&kvs[SMMU_KSTAT_TLB_SYNC_1024],
-		    "TLB sync 1024",
-		    KSTAT_KV_T_COUNTER64, KSTAT_KV_U_CYCLES);
-		kstat_kv_unit_init(&kvs[SMMU_KSTAT_TLB_SYNC_2048],
-		    "TLB sync 2048",
-		    KSTAT_KV_T_COUNTER64, KSTAT_KV_U_CYCLES);
-		kstat_kv_unit_init(&kvs[SMMU_KSTAT_TLB_SYNC_4096],
-		    "TLB sync 4096",
-		    KSTAT_KV_T_COUNTER64, KSTAT_KV_U_CYCLES);
-		kstat_kv_unit_init(&kvs[SMMU_KSTAT_TLB_SYNC_8192],
-		    "TLB sync 8192",
-		    KSTAT_KV_T_COUNTER64, KSTAT_KV_U_CYCLES);
-		kstat_kv_unit_init(&kvs[SMMU_KSTAT_TLB_SYNC_16384],
-		    "TLB sync 16384",
-		    KSTAT_KV_T_COUNTER64, KSTAT_KV_U_CYCLES);
-		kstat_kv_unit_init(&kvs[SMMU_KSTAT_TLB_SYNC_65536],
-		    "TLB sync 65536",
-		    KSTAT_KV_T_COUNTER64, KSTAT_KV_U_CYCLES);
-		kstat_kv_unit_init(&kvs[SMMU_KSTAT_TLB_SYNC_TIMEOUT],
-		    "TLB sync timeout",
-		    KSTAT_KV_T_COUNTER64, KSTAT_KV_U_NONE);
-		kstat_kv_unit_init(&kvs[SMMU_KSTAT_DMA_UNMAP_LEN],
-		    "DMA unmap len",
-		    KSTAT_KV_T_COUNTER64, KSTAT_KV_U_NONE);
-
-		dom->sd_ks->ks_softc = sc;
-		dom->sd_ks->ks_data = kvs;
-		dom->sd_ks->ks_datalen = SMMU_KSTAT_MAX * sizeof(*kvs);
-		kstat_set_mutex(dom->sd_ks, &dom->sd_kstat_mtx);
-
-		kstat_install(dom->sd_ks);
-	}
 
 	SIMPLEQ_INSERT_TAIL(&sc->sc_domains, dom, sd_list);
 	return dom;
@@ -1364,34 +1305,10 @@ smmu_unload_map(struct smmu_domain *dom, bus_dmamap_t map)
 		len -= PAGE_SIZE;
 	}
 
-	if (dom->sd_ks) {
-		struct kstat_kv *kvs = dom->sd_ks->ks_data;
-		kstat_kv_u64(&kvs[SMMU_KSTAT_DMA_UNMAP_LEN]) = sms->sms_loaded;
-	}
-
 	tsc = READ_SPECIALREG(pmccntr_el0);
 	smmu_tlb_sync_context(dom);
-	if (dom->sd_ks) {
-		struct kstat_kv *kvs = dom->sd_ks->ks_data;
-		int kidx;
-		if (sms->sms_loaded < 128)
-			kidx = SMMU_KSTAT_TLB_SYNC_0;
-		else if (sms->sms_loaded < 1024)
-			kidx = SMMU_KSTAT_TLB_SYNC_128;
-		else if (sms->sms_loaded < 2048)
-			kidx = SMMU_KSTAT_TLB_SYNC_1024;
-		else if (sms->sms_loaded < 4096)
-			kidx = SMMU_KSTAT_TLB_SYNC_2048;
-		else if (sms->sms_loaded < 8192)
-			kidx = SMMU_KSTAT_TLB_SYNC_4096;
-		else if (sms->sms_loaded < 16384)
-			kidx = SMMU_KSTAT_TLB_SYNC_8192;
-		else if (sms->sms_loaded < 65536)
-			kidx = SMMU_KSTAT_TLB_SYNC_16384;
-		else
-			kidx = SMMU_KSTAT_TLB_SYNC_65536;
-		kstat_kv_u64(&kvs[kidx]) = sms->sms_loaded << 32 | (READ_SPECIALREG(pmccntr_el0) - tsc);
-	}
+	tsc = READ_SPECIALREG(pmccntr_el0) - tsc;
+	TRACEPOINT(smmu, unload_map, dom->sd_sid, sms->sms_loaded, tsc);
 
 	sms->sms_loaded = 0;
 }

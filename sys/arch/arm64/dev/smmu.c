@@ -33,6 +33,19 @@
 #include <arm64/dev/smmuvar.h>
 #include <arm64/dev/smmureg.h>
 
+#define SMMU_KSTAT_TLB_SYNC_0		0
+#define SMMU_KSTAT_TLB_SYNC_128		1
+#define SMMU_KSTAT_TLB_SYNC_512		2
+#define SMMU_KSTAT_TLB_SYNC_1024	3
+#define SMMU_KSTAT_TLB_SYNC_2048	4
+#define SMMU_KSTAT_TLB_SYNC_4096	5
+#define SMMU_KSTAT_TLB_SYNC_8192	6
+#define SMMU_KSTAT_TLB_SYNC_16384	7
+#define SMMU_KSTAT_TLB_SYNC_65536	8
+#define SMMU_KSTAT_TLB_SYNC_TIMEOUT	9
+#define SMMU_KSTAT_DMA_UNMAP_LEN	10
+#define SMMU_KSTAT_MAX			11
+
 struct smmu_map_state {
 	struct extent_region	sms_er;
 	bus_addr_t		sms_dva;
@@ -403,10 +416,7 @@ void
 smmu_tlb_sync_context(struct smmu_domain *dom)
 {
 	struct smmu_softc *sc = dom->sd_sc;
-	uint64_t tsc;
 	int i;
-
-	tsc = READ_SPECIALREG(pmccntr_el0);
 
 	mtx_enter(&dom->sd_tlb_mtx);
 
@@ -423,15 +433,11 @@ smmu_tlb_sync_context(struct smmu_domain *dom)
 #endif
 	if (dom->sd_ks) {
 		struct kstat_kv *kvs = dom->sd_ks->ks_data;
-		kstat_kv_u64(&kvs[1]) += 1;
+		kstat_kv_u64(&kvs[SMMU_KSTAT_TLB_SYNC_TIMEOUT]) += 1;
 	}
 
 out:
 	mtx_leave(&dom->sd_tlb_mtx);
-	if (dom->sd_ks) {
-		struct kstat_kv *kvs = dom->sd_ks->ks_data;
-		kstat_kv_u64(&kvs[0]) = READ_SPECIALREG(pmccntr_el0) - tsc;
-	}
 }
 
 uint32_t
@@ -815,16 +821,45 @@ smmu_domain_create(struct smmu_softc *sc, uint32_t sid)
 	dom->sd_ks = kstat_create(dom->sd_kstat_name, 0, "smmu-stats", 0,
 	    KSTAT_T_KV, 0);
 	if (dom->sd_ks != NULL) {
-		kvs = mallocarray(2, sizeof(*kvs),
+		kvs = mallocarray(SMMU_KSTAT_MAX, sizeof(*kvs),
 		    M_DEVBUF, M_WAITOK|M_ZERO);
-		kstat_kv_unit_init(&kvs[0], "sync",
+		kstat_kv_unit_init(&kvs[SMMU_KSTAT_TLB_SYNC_0],
+		    "TLB sync 0",
 		    KSTAT_KV_T_COUNTER64, KSTAT_KV_U_CYCLES);
-		kstat_kv_unit_init(&kvs[1], "context timeout",
+		kstat_kv_unit_init(&kvs[SMMU_KSTAT_TLB_SYNC_128],
+		    "TLB sync 128",
+		    KSTAT_KV_T_COUNTER64, KSTAT_KV_U_CYCLES);
+		kstat_kv_unit_init(&kvs[SMMU_KSTAT_TLB_SYNC_512],
+		    "TLB sync 512",
+		    KSTAT_KV_T_COUNTER64, KSTAT_KV_U_CYCLES);
+		kstat_kv_unit_init(&kvs[SMMU_KSTAT_TLB_SYNC_1024],
+		    "TLB sync 1024",
+		    KSTAT_KV_T_COUNTER64, KSTAT_KV_U_CYCLES);
+		kstat_kv_unit_init(&kvs[SMMU_KSTAT_TLB_SYNC_2048],
+		    "TLB sync 2048",
+		    KSTAT_KV_T_COUNTER64, KSTAT_KV_U_CYCLES);
+		kstat_kv_unit_init(&kvs[SMMU_KSTAT_TLB_SYNC_4096],
+		    "TLB sync 4096",
+		    KSTAT_KV_T_COUNTER64, KSTAT_KV_U_CYCLES);
+		kstat_kv_unit_init(&kvs[SMMU_KSTAT_TLB_SYNC_8192],
+		    "TLB sync 8192",
+		    KSTAT_KV_T_COUNTER64, KSTAT_KV_U_CYCLES);
+		kstat_kv_unit_init(&kvs[SMMU_KSTAT_TLB_SYNC_16384],
+		    "TLB sync 16384",
+		    KSTAT_KV_T_COUNTER64, KSTAT_KV_U_CYCLES);
+		kstat_kv_unit_init(&kvs[SMMU_KSTAT_TLB_SYNC_65536],
+		    "TLB sync 65536",
+		    KSTAT_KV_T_COUNTER64, KSTAT_KV_U_CYCLES);
+		kstat_kv_unit_init(&kvs[SMMU_KSTAT_TLB_SYNC_TIMEOUT],
+		    "TLB sync timeout",
+		    KSTAT_KV_T_COUNTER64, KSTAT_KV_U_NONE);
+		kstat_kv_unit_init(&kvs[SMMU_KSTAT_DMA_UNMAP_LEN],
+		    "DMA unmap len",
 		    KSTAT_KV_T_COUNTER64, KSTAT_KV_U_NONE);
 
 		dom->sd_ks->ks_softc = sc;
 		dom->sd_ks->ks_data = kvs;
-		dom->sd_ks->ks_datalen = 2 * sizeof(*kvs);
+		dom->sd_ks->ks_datalen = SMMU_KSTAT_MAX * sizeof(*kvs);
 		kstat_set_mutex(dom->sd_ks, &dom->sd_kstat_mtx);
 
 		kstat_install(dom->sd_ks);
@@ -1313,6 +1348,7 @@ void
 smmu_unload_map(struct smmu_domain *dom, bus_dmamap_t map)
 {
 	struct smmu_map_state *sms = map->_dm_cookie;
+	uint64_t tsc;
 	u_long len, dva;
 
 	if (sms->sms_loaded == 0)
@@ -1328,9 +1364,36 @@ smmu_unload_map(struct smmu_domain *dom, bus_dmamap_t map)
 		len -= PAGE_SIZE;
 	}
 
-	sms->sms_loaded = 0;
+	if (dom->sd_ks) {
+		struct kstat_kv *kvs = dom->sd_ks->ks_data;
+		kstat_kv_u64(&kvs[SMMU_KSTAT_DMA_UNMAP_LEN]) = sms->sms_loaded;
+	}
 
+	tsc = READ_SPECIALREG(pmccntr_el0);
 	smmu_tlb_sync_context(dom);
+	if (dom->sd_ks) {
+		struct kstat_kv *kvs = dom->sd_ks->ks_data;
+		int kidx;
+		if (sms->sms_loaded < 128)
+			kidx = SMMU_KSTAT_TLB_SYNC_0;
+		else if (sms->sms_loaded < 1024)
+			kidx = SMMU_KSTAT_TLB_SYNC_128;
+		else if (sms->sms_loaded < 2048)
+			kidx = SMMU_KSTAT_TLB_SYNC_1024;
+		else if (sms->sms_loaded < 4096)
+			kidx = SMMU_KSTAT_TLB_SYNC_2048;
+		else if (sms->sms_loaded < 8192)
+			kidx = SMMU_KSTAT_TLB_SYNC_4096;
+		else if (sms->sms_loaded < 16384)
+			kidx = SMMU_KSTAT_TLB_SYNC_8192;
+		else if (sms->sms_loaded < 65536)
+			kidx = SMMU_KSTAT_TLB_SYNC_16384;
+		else
+			kidx = SMMU_KSTAT_TLB_SYNC_65536;
+		kstat_kv_u64(&kvs[kidx]) = sms->sms_loaded << 32 | (READ_SPECIALREG(pmccntr_el0) - tsc);
+	}
+
+	sms->sms_loaded = 0;
 }
 
 int

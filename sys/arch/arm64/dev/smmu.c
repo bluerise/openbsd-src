@@ -280,7 +280,7 @@ smmu_attach(struct smmu_softc *sc)
 	smmu_gr0_write_4(sc, SMMU_SGFSR, smmu_gr0_read_4(sc, SMMU_SGFSR));
 
 	for (i = 0; i < sc->sc_num_streams; i++) {
-#if 1
+#if 0
 		/* Setup all streams to fault by default */
 		smmu_gr0_write_4(sc, SMMU_S2CR(i), SMMU_S2CR_TYPE_FAULT);
 #else
@@ -321,7 +321,7 @@ smmu_attach(struct smmu_softc *sc)
 	reg = smmu_gr0_read_4(sc, SMMU_SCR0);
 	reg &= ~(SMMU_SCR0_CLIENTPD |
 	    SMMU_SCR0_FB | SMMU_SCR0_BSU_MASK);
-#if 1
+#if 0
 	/* Disable bypass for unknown streams */
 	reg |= SMMU_SCR0_USFCFG;
 #else
@@ -527,6 +527,10 @@ smmu_device_map(void *cookie, uint32_t sid, bus_dma_tag_t dmat)
 {
 	struct smmu_softc *sc = cookie;
 	struct smmu_domain *dom;
+
+	/* Only mcx(4) on my LX2K */
+	if ((sid & 0xffffff00) != 0x2800)
+		return dmat;
 
 	dom = smmu_domain_lookup(sc, sid);
 	if (dom == NULL)

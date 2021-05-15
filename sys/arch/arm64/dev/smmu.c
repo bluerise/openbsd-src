@@ -1644,6 +1644,7 @@ void
 smmu_dmamap_sync_bounce(bus_dma_tag_t t, bus_dmamap_t map, bus_addr_t addr,
     bus_size_t size, int ops)
 {
+	struct smmu_map_state *sms = map->_dm_cookie;
 	bus_dma_segment_t *ds = map->dm_segs;
 	bus_addr_t offset;
 	bus_size_t len;
@@ -1663,6 +1664,9 @@ smmu_dmamap_sync_bounce(bus_dma_tag_t t, bus_dmamap_t map, bus_addr_t addr,
 
 		paddr_t dstart = ds->ds_addr;
 		paddr_t dend = ds->ds_addr + ds->ds_len;
+
+		if (ops & (BUS_DMASYNC_PREWRITE|BUS_DMASYNC_POSTREAD))
+			sms->sms_synced += seglen;
 
 		if (seglen > 0) {
 			/* Check is segment was bounced */
@@ -1695,6 +1699,4 @@ smmu_dmamap_sync(bus_dma_tag_t t, bus_dmamap_t map, bus_addr_t addr,
 
 	if (sms->sms_bounce)
 		smmu_dmamap_sync_bounce(t, map, addr, size, ops);
-
-	sms->sms_synced += size;
 }

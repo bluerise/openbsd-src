@@ -1267,7 +1267,7 @@ db_show_all_pools(db_expr_t expr, int haddr, db_expr_t count, char *modif)
 	}
 
 	if (mode == '\0')
-		db_printf("%-10s%4s%9s%5s%9s%6s%6s%6s%6s%6s%6s%5s\n",
+		db_printf("%-10s%4s%9s%5s%9s%6s%6s%6s%6s%6s%6s%5s%6s\n",
 		    "Name",
 		    "Size",
 		    "Requests",
@@ -1279,7 +1279,8 @@ db_show_all_pools(db_expr_t expr, int haddr, db_expr_t count, char *modif)
 		    "Hiwat",
 		    "Minpg",
 		    "Maxpg",
-		    "Idle");
+		    "Idle",
+		    "Pghdr");
 	else
 		db_printf("%-12s %18s %18s\n",
 		    "Name", "Address", "Allocator");
@@ -1320,7 +1321,8 @@ db_show_all_pools(db_expr_t expr, int haddr, db_expr_t count, char *modif)
 		PRWORD(ovflw, " %*d", 6, 1, pp->pr_hiwat);
 		PRWORD(ovflw, " %*d", 6, 1, pp->pr_minpages);
 		PRWORD(ovflw, " %*s", 6, 1, maxp);
-		PRWORD(ovflw, " %*lu\n", 5, 1, pp->pr_nidle);
+		PRWORD(ovflw, " %*lu", 5, 1, pp->pr_nidle);
+		PRWORD(ovflw, " %*s\n", 6, 1, POOL_INPGHDR(pp) ? "*" : "");
 
 		pool_chk(pp);
 	}

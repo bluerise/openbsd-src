@@ -1574,7 +1574,7 @@ smmu_dmamap_sync_segment(bus_dma_tag_t t, bus_dmamap_t map, vaddr_t va,
 		left = len;
 		tsc = READ_SPECIALREG(pmccntr_el0);
 		while (left > 0) {
-			memcpy((char *)curva, sms->sms_kva, min(len, 8 * PAGE_SIZE));
+			memcpy(sms->sms_kva, (char *)curva, min(len, 8 * PAGE_SIZE));
 			curva += min(len, 8 * PAGE_SIZE);
 			len -= min(len, 8 * PAGE_SIZE);
 		}

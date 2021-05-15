@@ -1542,27 +1542,89 @@ smmu_dmamap_unload(bus_dma_tag_t t, bus_dmamap_t map)
 	sc->sc_dmat->_dmamap_unload(sc->sc_dmat, map);
 }
 
+int
+smmu_dmamap_sync_segment(bus_dma_tag_t t, bus_dmamap_t map, vaddr_t va,
+    paddr_t pa, vsize_t len, int ops)
+{
+	struct smmu_map_state *sms = map->_dm_cookie;
+	uint64_t tsc;
+	vaddr_t curva;
+	vsize_t left;
+
+	if (ops & BUS_DMASYNC_PREWRITE) {
+		KASSERT(va >= VM_MIN_KERNEL_ADDRESS);
+		curva = va;
+		left = len;
+		tsc = READ_SPECIALREG(pmccntr_el0);
+		while (left > 0) {
+			memcpy(sms->sms_kva, (char *)curva, min(len, 8 * PAGE_SIZE));
+			curva += min(len, 8 * PAGE_SIZE);
+			len -= min(len, 8 * PAGE_SIZE);
+		}
+		tsc = READ_SPECIALREG(pmccntr_el0) - tsc;
+		sms->sms_cycles += tsc;
+	}
+
+//	bus_dmamap_sync(sc->sc_dmat, sms->sms_map, i * PAGE_SIZE + (va & PAGE_MASK), len, ops);
+	membar_sync();
+
+	if (ops & BUS_DMASYNC_POSTREAD) {
+		KASSERT(va >= VM_MIN_KERNEL_ADDRESS);
+		curva = va;
+		left = len;
+		tsc = READ_SPECIALREG(pmccntr_el0);
+		while (left > 0) {
+			memcpy((char *)curva, sms->sms_kva, min(len, 8 * PAGE_SIZE));
+			curva += min(len, 8 * PAGE_SIZE);
+			len -= min(len, 8 * PAGE_SIZE);
+		}
+		tsc = READ_SPECIALREG(pmccntr_el0) - tsc;
+		sms->sms_cycles += tsc;
+	}
+
+	return 1;
+}
+
+void
+smmu_dmamap_sync_bounce(bus_dma_tag_t t, bus_dmamap_t map, bus_addr_t addr,
+    bus_size_t size, int ops)
+{
+	bus_dma_segment_t *ds = map->dm_segs;
+	bus_addr_t offset;
+	bus_size_t len;
+
+	offset = addr;
+	len = size;
+	while (len > 0) {
+		/* Search for the first relevant segment */
+		while (offset >= ds->ds_len) {
+			offset -= ds->ds_len;
+			ds++;
+		}
+
+		vaddr_t va = ds->_ds_vaddr + offset;
+		paddr_t pa = ds->ds_addr + offset;
+		size_t seglen = min(len, ds->ds_len - offset);
+
+		if (seglen > 0)
+			smmu_dmamap_sync_segment(t, map, va, pa, seglen, ops);
+
+		offset += seglen;
+		len -= seglen;
+	}
+}
+
 void
 smmu_dmamap_sync(bus_dma_tag_t t, bus_dmamap_t map, bus_addr_t addr,
     bus_size_t size, int ops)
 {
 	struct smmu_map_state *sms = map->_dm_cookie;
-	uint64_t tsc;
 
 	KASSERT(sms->sms_loaded);
 
 	KASSERT(t->_flags & BUS_DMA_COHERENT);
 	membar_sync();
 
-	if (sms->sms_bounce && smmu_copy) {
-		sms->sms_synced += size;
-		tsc = READ_SPECIALREG(pmccntr_el0);
-		while (size) {
-			memcpy(sms->sms_kva, sms->sms_kva + (sms->sms_size / 2),
-			    min(sms->sms_size / 2, size));
-			size -= min(sms->sms_size / 2, size);
-		}
-		tsc = READ_SPECIALREG(pmccntr_el0) - tsc;
-		sms->sms_cycles += tsc;
-	}
+	if (sms->sms_bounce && smmu_copy)
+		smmu_dmamap_sync_bounce(t, map, addr, size, ops);
 }

@@ -6806,7 +6806,8 @@ mcx_process_rx(struct mcx_softc *sc, struct mcx_rx *rx,
 	slot = betoh16(cqe->cq_wqe_count) % (1 << MCX_LOG_RQ_SIZE);
 
 	ms = &rx->rx_slots[slot];
-	bus_dmamap_sync(sc->sc_dmat, ms->ms_map, 0, ms->ms_map->dm_mapsize,
+	bus_dmamap_sync(sc->sc_dmat, ms->ms_map, 0,
+	    min(bemtoh32(&cqe->cq_byte_cnt), ms->ms_map->dm_mapsize),
 	    BUS_DMASYNC_POSTREAD);
 	bus_dmamap_unload(sc->sc_dmat, ms->ms_map);
 

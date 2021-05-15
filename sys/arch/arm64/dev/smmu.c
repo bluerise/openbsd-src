@@ -1563,6 +1563,7 @@ smmu_dmamap_sync_segment(bus_dma_tag_t t, bus_dmamap_t map, vaddr_t va,
 		}
 		tsc = READ_SPECIALREG(pmccntr_el0) - tsc;
 		sms->sms_cycles += tsc;
+		sms->sms_synced += len;
 	}
 
 //	bus_dmamap_sync(sc->sc_dmat, sms->sms_map, i * PAGE_SIZE + (va & PAGE_MASK), len, ops);
@@ -1580,6 +1581,7 @@ smmu_dmamap_sync_segment(bus_dma_tag_t t, bus_dmamap_t map, vaddr_t va,
 		}
 		tsc = READ_SPECIALREG(pmccntr_el0) - tsc;
 		sms->sms_cycles += tsc;
+		sms->sms_synced += len;
 	}
 
 	return 1;
@@ -1627,6 +1629,4 @@ smmu_dmamap_sync(bus_dma_tag_t t, bus_dmamap_t map, bus_addr_t addr,
 
 	if (sms->sms_bounce && smmu_copy)
 		smmu_dmamap_sync_bounce(t, map, addr, size, ops);
-
-	sms->sms_synced += size;
 }

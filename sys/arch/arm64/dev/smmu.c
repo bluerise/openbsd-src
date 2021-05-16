@@ -22,6 +22,7 @@
 #include <sys/pool.h>
 #include <sys/atomic.h>
 #include <sys/tracepoint.h>
+#include <sys/mbuf.h>
 
 #include <machine/bus.h>
 
@@ -52,6 +53,7 @@ struct smmu_map_state {
 	bus_size_t		sms_len;
 	bus_size_t		sms_loaded;
 	uint32_t		sms_usedlen;
+	struct mbuf		*sms_mbuf;
 
 	/* bounce buffer */
 	int			sms_bounce;
@@ -1282,6 +1284,36 @@ smmu_remove(struct smmu_domain *dom, vaddr_t va)
 }
 
 int
+smmu_mbuf_check(struct smmu_domain *dom, bus_dmamap_t map, vaddr_t va, vsize_t len)
+{
+	struct smmu_map_state *sms = map->_dm_cookie;
+	struct mbuf *m;
+
+	if (sms->sms_mbuf == NULL)
+		return 1;
+
+	for (m = sms->sms_mbuf; m != NULL; m = m->m_next) {
+		if (m->m_len == 0)
+			continue;
+		if ((vaddr_t)m->m_data < va || (vaddr_t)m->m_data > va + len)
+			continue;
+		printf("%s:%d\n", __func__, __LINE__);
+		if ((m->m_flags & M_EXT) == 0)
+			return 1;
+		printf("%s:%d\n", __func__, __LINE__);
+		if (m->m_ext.ext_free_fn != MEXTFREE_POOL)
+			return 1;
+		printf("%s:%d\n", __func__, __LINE__);
+		if (m->m_ext.ext_size < 4096)
+			return 1;
+		printf("%s:%d\n", __func__, __LINE__);
+		return 0;
+	}
+
+	return 1;
+}
+
+int
 smmu_load_map(struct smmu_domain *dom, bus_dmamap_t map, int flags)
 {
 	struct smmu_map_state *sms = map->_dm_cookie;
@@ -1301,16 +1333,19 @@ smmu_load_map(struct smmu_domain *dom, bus_dmamap_t map, int flags)
 		paddr_t pa = map->dm_segs[seg]._ds_paddr;
 		psize_t off = pa - trunc_page(pa);
 		u_long len = map->dm_segs[seg].ds_len + off;
+		vaddr_t va = map->dm_segs[seg]._ds_vaddr;
 
 		map->dm_segs[seg].ds_addr = dva + off;
 
 		if (!sms->sms_bounce) {
+			va = trunc_page(va);
 			pa = trunc_page(pa);
 			len = round_page(len);
 		}
 
 		/* Bounce unaligned start */
-		if (pa & PAGE_MASK || len < PAGE_SIZE) {
+		if ((pa & PAGE_MASK || len < PAGE_SIZE) &&
+		    smmu_mbuf_check(dom, map, va, min(len, PAGE_SIZE))) {
 			vaddr_t pva = (vaddr_t)pool_get(&smmu_buf_pool,
 			    (flags & BUS_DMA_NOWAIT) ?  PR_NOWAIT : PR_WAITOK);
 			if (pva == 0) {
@@ -1331,11 +1366,13 @@ smmu_load_map(struct smmu_domain *dom, bus_dmamap_t map, int flags)
 			used += 1;
 			dva += PAGE_SIZE;
 			pa += PAGE_SIZE;
+			va += PAGE_SIZE;
 			len -= min(len, PAGE_SIZE);
 			sms->sms_loaded += PAGE_SIZE;
 		}
 
 		pa = trunc_page(pa);
+		va = trunc_page(va);
 		while (len >= PAGE_SIZE) {
 			smmu_map(dom, dva, pa,
 			    PROT_READ | PROT_WRITE,
@@ -1343,12 +1380,14 @@ smmu_load_map(struct smmu_domain *dom, bus_dmamap_t map, int flags)
 
 			dva += PAGE_SIZE;
 			pa += PAGE_SIZE;
+			va += PAGE_SIZE;
 			len -= PAGE_SIZE;
 			sms->sms_loaded += PAGE_SIZE;
 		}
 
 		/* Bounce unaligned end */
-		if (len > 0) {
+		if (len > 0 &&
+		    smmu_mbuf_check(dom, map, va, len)) {
 			vaddr_t pva = (vaddr_t)pool_get(&smmu_buf_pool,
 			    (flags & BUS_DMA_NOWAIT) ?  PR_NOWAIT : PR_WAITOK);
 			if (pva == 0) {
@@ -1369,6 +1408,7 @@ smmu_load_map(struct smmu_domain *dom, bus_dmamap_t map, int flags)
 			used += 1;
 			dva += PAGE_SIZE;
 			pa += PAGE_SIZE;
+			va += PAGE_SIZE;
 			len -= len;
 			sms->sms_loaded += PAGE_SIZE;
 		}
@@ -1536,12 +1576,14 @@ smmu_dmamap_load_mbuf(bus_dma_tag_t t, bus_dmamap_t map, struct mbuf *m0,
 {
 	struct smmu_domain *dom = t->_cookie;
 	struct smmu_softc *sc = dom->sd_sc;
+	struct smmu_map_state *sms = map->_dm_cookie;
 	int error;
 
 	error = sc->sc_dmat->_dmamap_load_mbuf(sc->sc_dmat, map,
 	    m0, flags);
 	if (error)
 		return error;
+	sms->sms_mbuf = m0;
 
 	error = smmu_load_map(dom, map, flags);
 	if (error)
@@ -1595,7 +1637,9 @@ smmu_dmamap_unload(bus_dma_tag_t t, bus_dmamap_t map)
 {
 	struct smmu_domain *dom = t->_cookie;
 	struct smmu_softc *sc = dom->sd_sc;
+	struct smmu_map_state *sms = map->_dm_cookie;
 
+	sms->sms_mbuf = NULL;
 	smmu_unload_map(dom, map);
 	sc->sc_dmat->_dmamap_unload(sc->sc_dmat, map);
 }

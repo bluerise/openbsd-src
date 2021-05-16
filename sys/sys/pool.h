@@ -185,6 +185,7 @@ struct pool {
 #define PR_ZERO		0x0008 /* M_ZERO */
 #define PR_RWLOCK	0x0010
 #define PR_WANTED	0x0100
+#define PR_NOPGHDR	0x0200
 
 	int		pr_flags;
 	int		pr_ipl;

@@ -407,6 +407,8 @@ pool_init(struct pool *pp, size_t size, u_int align, int ipl, int flags,
 			items = off / size;
 		}
 	}
+	if (ISSET(flags, PR_NOPGHDR))
+		off = 0;
 
 	KASSERT(items > 0);
 

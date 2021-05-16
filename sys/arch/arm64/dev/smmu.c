@@ -1297,16 +1297,12 @@ smmu_mbuf_check(struct smmu_domain *dom, bus_dmamap_t map, vaddr_t va, vsize_t l
 			continue;
 		if ((vaddr_t)m->m_data < va || (vaddr_t)m->m_data > va + len)
 			continue;
-		printf("%s:%d\n", __func__, __LINE__);
 		if ((m->m_flags & M_EXT) == 0)
 			return 1;
-		printf("%s:%d\n", __func__, __LINE__);
 		if (m->m_ext.ext_free_fn != MEXTFREE_POOL)
 			return 1;
-		printf("%s:%d\n", __func__, __LINE__);
 		if (m->m_ext.ext_size < 4096)
 			return 1;
-		printf("%s:%d\n", __func__, __LINE__);
 		return 0;
 	}
 

@@ -1357,20 +1357,31 @@ smmu_load_map(struct smmu_domain *dom, bus_dmamap_t map)
 		}
 
 		/* Bounce unaligned end */
-		if (len > 0 &&
-		    smmu_mbuf_check(dom, map, va, len)) {
-			smmu_map(dom, dva, bpa,
-			    PROT_READ | PROT_WRITE,
-			    PROT_READ | PROT_WRITE, PMAP_CACHE_WB);
+		if (len > 0) {
+			if (smmu_mbuf_check(dom, map, va, len)) {
+				smmu_map(dom, dva, bpa,
+				    PROT_READ | PROT_WRITE,
+				    PROT_READ | PROT_WRITE, PMAP_CACHE_WB);
 
-			KASSERT(used < (sms->sms_size / PAGE_SIZE));
-			sms->sms_used[used++] = dva;
-			dva += PAGE_SIZE;
-			pa += PAGE_SIZE;
-			va += PAGE_SIZE;
-			bpa += PAGE_SIZE;
-			len -= len;
-			sms->sms_loaded += PAGE_SIZE;
+				KASSERT(used < (sms->sms_size / PAGE_SIZE));
+				sms->sms_used[used++] = dva;
+				dva += PAGE_SIZE;
+				pa += PAGE_SIZE;
+				va += PAGE_SIZE;
+				bpa += PAGE_SIZE;
+				len -= len;
+				sms->sms_loaded += PAGE_SIZE;
+			} else {
+				smmu_map(dom, dva, pa,
+				    PROT_READ | PROT_WRITE,
+				    PROT_READ | PROT_WRITE, PMAP_CACHE_WB);
+
+				dva += PAGE_SIZE;
+				pa += PAGE_SIZE;
+				va += PAGE_SIZE;
+				len -= len;
+				sms->sms_loaded += PAGE_SIZE;
+			}
 		}
 	}
 
@@ -1659,7 +1670,7 @@ smmu_dmamap_sync_segment(bus_dma_tag_t t, bus_dmamap_t map, vaddr_t va,
 	}
 
 	if (i >= (sms->sms_size / PAGE_SIZE) || sms->sms_used[i] == -1) {
-		printf("%s: no bounce for dva %lx\n", __func__, pa);
+//		printf("%s: no bounce for dva %lx\n", __func__, pa);
 		return 0;
 	}
 

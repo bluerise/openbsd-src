@@ -1295,7 +1295,8 @@ smmu_mbuf_check(struct smmu_domain *dom, bus_dmamap_t map, vaddr_t va, vsize_t l
 	for (m = sms->sms_mbuf; m != NULL; m = m->m_next) {
 		if (m->m_len == 0)
 			continue;
-		if ((vaddr_t)m->m_data < va || (vaddr_t)m->m_data > va + len)
+		if ((va < (vaddr_t)m->m_data || va > (vaddr_t)m->m_data + m->m_len) &&
+		    (va + len < (vaddr_t)m->m_data || va + len > (vaddr_t)m->m_data + m->m_len))
 			continue;
 		if ((m->m_flags & M_EXT) == 0)
 			return 1;

@@ -1386,31 +1386,42 @@ smmu_load_map(struct smmu_domain *dom, bus_dmamap_t map, int flags)
 		}
 
 		/* Bounce unaligned end */
-		if (len > 0 &&
-		    smmu_mbuf_check(dom, map, va, len)) {
-			vaddr_t pva = (vaddr_t)pool_get(&smmu_buf_pool,
-			    (flags & BUS_DMA_NOWAIT) ?  PR_NOWAIT : PR_WAITOK);
-			if (pva == 0) {
-				smmu_unload_map(dom, map);
-				return ENOMEM;
+		if (len > 0) {
+			if (smmu_mbuf_check(dom, map, va, len)) {
+				vaddr_t pva = (vaddr_t)pool_get(&smmu_buf_pool,
+				    (flags & BUS_DMA_NOWAIT) ?  PR_NOWAIT : PR_WAITOK);
+				if (pva == 0) {
+					smmu_unload_map(dom, map);
+					return ENOMEM;
+				}
+				paddr_t ppa;
+				if (pmap_extract(pmap_kernel(), pva, &ppa) == 0)
+					panic("%s: unable to find vp pa mapping 0x%lx", __func__, pva);
+
+				smmu_map(dom, dva, ppa,
+				    PROT_READ | PROT_WRITE,
+				    PROT_READ | PROT_WRITE, PMAP_CACHE_WB);
+
+				KASSERT(used < 8);
+				sms->sms_usedpa[used] = dva;
+				sms->sms_usedva[used] = pva;
+				used += 1;
+				dva += PAGE_SIZE;
+				pa += PAGE_SIZE;
+				va += PAGE_SIZE;
+				len -= len;
+				sms->sms_loaded += PAGE_SIZE;
+			} else {
+				smmu_map(dom, dva, pa,
+				    PROT_READ | PROT_WRITE,
+				    PROT_READ | PROT_WRITE, PMAP_CACHE_WB);
+
+				dva += PAGE_SIZE;
+				pa += PAGE_SIZE;
+				va += PAGE_SIZE;
+				len -= len;
+				sms->sms_loaded += PAGE_SIZE;
 			}
-			paddr_t ppa;
-			if (pmap_extract(pmap_kernel(), pva, &ppa) == 0)
-				panic("%s: unable to find vp pa mapping 0x%lx", __func__, pva);
-
-			smmu_map(dom, dva, ppa,
-			    PROT_READ | PROT_WRITE,
-			    PROT_READ | PROT_WRITE, PMAP_CACHE_WB);
-
-			KASSERT(used < 8);
-			sms->sms_usedpa[used] = dva;
-			sms->sms_usedva[used] = pva;
-			used += 1;
-			dva += PAGE_SIZE;
-			pa += PAGE_SIZE;
-			va += PAGE_SIZE;
-			len -= len;
-			sms->sms_loaded += PAGE_SIZE;
 		}
 	}
 
@@ -1659,7 +1670,7 @@ smmu_dmamap_sync_segment(bus_dma_tag_t t, bus_dmamap_t map, vaddr_t va,
 	}
 
 	if (i >= 8 || sms->sms_usedpa[i] == -1) {
-		printf("%s: no bounce for dva %lx\n", __func__, pa);
+//		printf("%s: no bounce for dva %lx\n", __func__, pa);
 		return 0;
 	}
 

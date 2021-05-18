@@ -544,8 +544,7 @@ smmu_device_map(void *cookie, uint32_t sid, bus_dma_tag_t dmat)
 	struct smmu_domain *dom;
 
 	/* Only mcx(4) on my LX2K */
-	//if ((sid & 0xffffff00) != 0x2800)
-	if (sid != 0x2801)
+	if ((sid & 0xffffff00) != 0x2800)
 		return dmat;
 
 	dom = smmu_domain_lookup(sc, sid);

@@ -144,6 +144,9 @@ int smmu_dmamap_load_raw(bus_dma_tag_t , bus_dmamap_t,
 void smmu_dmamap_unload(bus_dma_tag_t , bus_dmamap_t);
 void smmu_dmamap_sync(bus_dma_tag_t, bus_dmamap_t, bus_addr_t, bus_size_t, int);
 
+struct pool smmu_pted_pool;
+struct pool smmu_vp_pool;
+
 struct cfdriver smmu_cd = {
 	NULL, "smmu", DV_DULL
 };
@@ -164,12 +167,16 @@ smmu_attach(struct smmu_softc *sc)
 
 	SIMPLEQ_INIT(&sc->sc_domains);
 
-	pool_init(&sc->sc_pted_pool, sizeof(struct pte_desc), 0, IPL_VM, 0,
-	    "smmu_pted", NULL);
-	pool_setlowat(&sc->sc_pted_pool, 20);
-	pool_init(&sc->sc_vp_pool, sizeof(struct smmuvp0), PAGE_SIZE, IPL_VM, 0,
-	    "smmu_vp", NULL);
-	pool_setlowat(&sc->sc_vp_pool, 20);
+	if (smmu_pted_pool.pr_size == 0) {
+		pool_init(&smmu_pted_pool, sizeof(struct pte_desc), 0, IPL_VM, 0,
+		    "smmu_pted", NULL);
+		pool_setlowat(&smmu_pted_pool, 20);
+	}
+	if (smmu_vp_pool.pr_size == 0) {
+		pool_init(&smmu_vp_pool, sizeof(struct smmuvp0), PAGE_SIZE, IPL_VM, 0,
+		    "smmu_vp", NULL);
+		pool_setlowat(&smmu_vp_pool, 20);
+	}
 
 	reg = smmu_gr0_read_4(sc, SMMU_IDR0);
 	if (reg & SMMU_IDR0_S1TS)
@@ -747,14 +754,14 @@ smmu_domain_create(struct smmu_softc *sc, uint32_t sid)
 
 	if (dom->sd_4level) {
 		while (dom->sd_vp.l0 == NULL) {
-			dom->sd_vp.l0 = pool_get(&sc->sc_vp_pool,
+			dom->sd_vp.l0 = pool_get(&smmu_vp_pool,
 			    PR_WAITOK | PR_ZERO);
 		}
 		dom->sd_memory += sizeof(struct smmuvp0);
 		l0va = (vaddr_t)dom->sd_vp.l0->l0; /* top level is l0 */
 	} else {
 		while (dom->sd_vp.l1 == NULL) {
-			dom->sd_vp.l1 = pool_get(&sc->sc_vp_pool,
+			dom->sd_vp.l1 = pool_get(&smmu_vp_pool,
 			    PR_WAITOK | PR_ZERO);
 		}
 		dom->sd_memory += sizeof(struct smmuvp0);
@@ -970,7 +977,6 @@ int
 smmu_vp_enter(struct smmu_domain *dom, vaddr_t va, struct pte_desc *pted,
     int flags)
 {
-	struct smmu_softc *sc = dom->sd_sc;
 	struct smmuvp1 *vp1;
 	struct smmuvp2 *vp2;
 	struct smmuvp3 *vp3;
@@ -981,7 +987,7 @@ smmu_vp_enter(struct smmu_domain *dom, vaddr_t va, struct pte_desc *pted,
 			mtx_enter(&dom->sd_pmap_mtx);
 			vp1 = dom->sd_vp.l0->vp[VP_IDX0(va)];
 			if (vp1 == NULL) {
-				vp1 = pool_get(&sc->sc_vp_pool,
+				vp1 = pool_get(&smmu_vp_pool,
 				    PR_NOWAIT | PR_ZERO);
 				if (vp1 == NULL) {
 					mtx_leave(&dom->sd_pmap_mtx);
@@ -1001,7 +1007,7 @@ smmu_vp_enter(struct smmu_domain *dom, vaddr_t va, struct pte_desc *pted,
 		mtx_enter(&dom->sd_pmap_mtx);
 		vp2 = vp1->vp[VP_IDX1(va)];
 		if (vp2 == NULL) {
-			vp2 = pool_get(&sc->sc_vp_pool, PR_NOWAIT | PR_ZERO);
+			vp2 = pool_get(&smmu_vp_pool, PR_NOWAIT | PR_ZERO);
 			if (vp2 == NULL) {
 				mtx_leave(&dom->sd_pmap_mtx);
 				return ENOMEM;
@@ -1017,7 +1023,7 @@ smmu_vp_enter(struct smmu_domain *dom, vaddr_t va, struct pte_desc *pted,
 		mtx_enter(&dom->sd_pmap_mtx);
 		vp3 = vp2->vp[VP_IDX2(va)];
 		if (vp3 == NULL) {
-			vp3 = pool_get(&sc->sc_vp_pool, PR_NOWAIT | PR_ZERO);
+			vp3 = pool_get(&smmu_vp_pool, PR_NOWAIT | PR_ZERO);
 			if (vp3 == NULL) {
 				mtx_leave(&dom->sd_pmap_mtx);
 				return ENOMEM;
@@ -1177,7 +1183,6 @@ int
 smmu_enter(struct smmu_domain *dom, vaddr_t va, paddr_t pa, vm_prot_t prot,
     int flags, int cache)
 {
-	struct smmu_softc *sc = dom->sd_sc;
 	struct pte_desc *pted;
 	int error;
 
@@ -1185,13 +1190,13 @@ smmu_enter(struct smmu_domain *dom, vaddr_t va, paddr_t pa, vm_prot_t prot,
 
 	pted = smmu_vp_lookup(dom, va, NULL);
 	if (pted == NULL) {
-		pted = pool_get(&sc->sc_pted_pool, PR_NOWAIT | PR_ZERO);
+		pted = pool_get(&smmu_pted_pool, PR_NOWAIT | PR_ZERO);
 		if (pted == NULL) {
 			error = ENOMEM;
 			goto out;
 		}
 		if (smmu_vp_enter(dom, va, pted, flags)) {
-			pool_put(&sc->sc_pted_pool, pted);
+			pool_put(&smmu_pted_pool, pted);
 			error = ENOMEM;
 			goto out;
 		}
@@ -1252,7 +1257,6 @@ smmu_unmap(struct smmu_domain *dom, vaddr_t va)
 void
 smmu_remove(struct smmu_domain *dom, vaddr_t va)
 {
-	struct smmu_softc *sc = dom->sd_sc;
 	struct pte_desc *pted;
 
 	/* printf("%s: 0x%lx\n", __func__, va); */
@@ -1267,7 +1271,7 @@ smmu_remove(struct smmu_domain *dom, vaddr_t va)
 	/* Destroy pted */
 	pted->pted_pte = 0;
 	pted->pted_va = 0;
-	pool_put(&sc->sc_pted_pool, pted);
+	pool_put(&smmu_pted_pool, pted);
 }
 
 int

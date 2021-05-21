@@ -29,8 +29,10 @@ struct pool cpumem_pl;
 void
 percpu_init(void)
 {
-	pool_init(&cpumem_pl, sizeof(struct cpumem) * ncpusfound, 0,
-	    IPL_NONE, PR_WAITOK, "percpumem", &pool_allocator_single);
+	if (cpumem_pl.pr_size == 0) {
+		pool_init(&cpumem_pl, sizeof(struct cpumem) * ncpusfound, 0,
+		    IPL_NONE, PR_WAITOK, "percpumem", &pool_allocator_single);
+	}
 }
 
 struct cpumem *

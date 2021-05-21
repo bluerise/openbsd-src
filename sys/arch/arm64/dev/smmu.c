@@ -55,12 +55,8 @@ struct smmu_map_state {
 
 	/* bounce buffer */
 	int			sms_bounce;
-	bus_dmamap_t		sms_map;
-	bus_dma_segment_t	sms_seg;
-	int			sms_nseg;
-	size_t			sms_size;
-	caddr_t			sms_kva;
-	vaddr_t			sms_used[8];
+	vaddr_t			sms_usedva[8];
+	vaddr_t			sms_usedpa[8];
 };
 
 struct smmuvp0 {
@@ -127,7 +123,7 @@ void smmu_map(struct smmu_domain *, vaddr_t, paddr_t, vm_prot_t, int, int);
 void smmu_unmap(struct smmu_domain *, vaddr_t);
 void smmu_remove(struct smmu_domain *, vaddr_t);
 
-int smmu_load_map(struct smmu_domain *, bus_dmamap_t);
+int smmu_load_map(struct smmu_domain *, bus_dmamap_t, int);
 void smmu_unload_map(struct smmu_domain *, bus_dmamap_t);
 
 int smmu_dmamap_create(bus_dma_tag_t , bus_size_t, int,
@@ -144,8 +140,11 @@ int smmu_dmamap_load_raw(bus_dma_tag_t , bus_dmamap_t,
 void smmu_dmamap_unload(bus_dma_tag_t , bus_dmamap_t);
 void smmu_dmamap_sync(bus_dma_tag_t, bus_dmamap_t, bus_addr_t, bus_size_t, int);
 
+void percpu_init(void);
+
 struct pool smmu_pted_pool;
 struct pool smmu_vp_pool;
+struct pool smmu_buf_pool;
 
 struct cfdriver smmu_cd = {
 	NULL, "smmu", DV_DULL
@@ -177,6 +176,14 @@ smmu_attach(struct smmu_softc *sc)
 		    "smmu_vp", NULL);
 		pool_setlowat(&smmu_vp_pool, 20);
 	}
+	if (smmu_buf_pool.pr_size == 0) {
+		pool_init(&smmu_buf_pool, PAGE_SIZE, PAGE_SIZE, IPL_VM, 0,
+		    "smmu_buf", NULL);
+		pool_setlowat(&smmu_buf_pool, 20);
+	}
+
+	percpu_init();
+	pool_cache_init(&smmu_buf_pool);
 
 	reg = smmu_gr0_read_4(sc, SMMU_IDR0);
 	if (reg & SMMU_IDR0_S1TS)
@@ -1275,15 +1282,11 @@ smmu_remove(struct smmu_domain *dom, vaddr_t va)
 }
 
 int
-smmu_load_map(struct smmu_domain *dom, bus_dmamap_t map)
+smmu_load_map(struct smmu_domain *dom, bus_dmamap_t map, int flags)
 {
 	struct smmu_map_state *sms = map->_dm_cookie;
 	u_long dva, maplen;
-	paddr_t bpa;
 	int seg, used = 0;
-
-	if (sms->sms_bounce)
-		bpa = sms->sms_map->dm_segs[0].ds_addr;
 
 	maplen = 0;
 	for (seg = 0; seg < map->dm_nsegs; seg++) {
@@ -1308,15 +1311,26 @@ smmu_load_map(struct smmu_domain *dom, bus_dmamap_t map)
 
 		/* Bounce unaligned start */
 		if (pa & PAGE_MASK || len < PAGE_SIZE) {
-			smmu_map(dom, dva, bpa,
+			vaddr_t pva = (vaddr_t)pool_get(&smmu_buf_pool,
+			    (flags & BUS_DMA_NOWAIT) ?  PR_NOWAIT : PR_WAITOK);
+			if (pva == 0) {
+				smmu_unload_map(dom, map);
+				return ENOMEM;
+			}
+			paddr_t ppa;
+			if (pmap_extract(pmap_kernel(), pva, &ppa) == 0)
+				panic("%s: unable to find vp pa mapping 0x%lx", __func__, pva);
+
+			smmu_map(dom, dva, ppa,
 			    PROT_READ | PROT_WRITE,
 			    PROT_READ | PROT_WRITE, PMAP_CACHE_WB);
 
-			KASSERT(used < (sms->sms_size / PAGE_SIZE));
-			sms->sms_used[used++] = dva;
+			KASSERT(used < 8);
+			sms->sms_usedpa[used] = dva;
+			sms->sms_usedva[used] = pva;
+			used += 1;
 			dva += PAGE_SIZE;
 			pa += PAGE_SIZE;
-			bpa += PAGE_SIZE;
 			len -= min(len, PAGE_SIZE);
 			sms->sms_loaded += PAGE_SIZE;
 		}
@@ -1335,15 +1349,26 @@ smmu_load_map(struct smmu_domain *dom, bus_dmamap_t map)
 
 		/* Bounce unaligned end */
 		if (len > 0) {
-			smmu_map(dom, dva, bpa,
+			vaddr_t pva = (vaddr_t)pool_get(&smmu_buf_pool,
+			    (flags & BUS_DMA_NOWAIT) ?  PR_NOWAIT : PR_WAITOK);
+			if (pva == 0) {
+				smmu_unload_map(dom, map);
+				return ENOMEM;
+			}
+			paddr_t ppa;
+			if (pmap_extract(pmap_kernel(), pva, &ppa) == 0)
+				panic("%s: unable to find vp pa mapping 0x%lx", __func__, pva);
+
+			smmu_map(dom, dva, ppa,
 			    PROT_READ | PROT_WRITE,
 			    PROT_READ | PROT_WRITE, PMAP_CACHE_WB);
 
-			KASSERT(used < (sms->sms_size / PAGE_SIZE));
-			sms->sms_used[used++] = dva;
+			KASSERT(used < 8);
+			sms->sms_usedpa[used] = dva;
+			sms->sms_usedva[used] = pva;
+			used += 1;
 			dva += PAGE_SIZE;
 			pa += PAGE_SIZE;
-			bpa += PAGE_SIZE;
 			len -= len;
 			sms->sms_loaded += PAGE_SIZE;
 		}
@@ -1361,11 +1386,20 @@ smmu_unload_map(struct smmu_domain *dom, bus_dmamap_t map)
 {
 	struct smmu_map_state *sms = map->_dm_cookie;
 	u_long len, dva;
+	int i;
 
 	if (sms->sms_loaded == 0)
 		return;
 
-	memset(sms->sms_used, 0xff, (sms->sms_size / PAGE_SIZE) * sizeof(vaddr_t));
+	if (sms->sms_bounce) {
+		for (i = 0; i < 8; i++) {
+			if (sms->sms_usedpa[i] == ~0)
+				break;
+			pool_put(&smmu_buf_pool, (void *)sms->sms_usedva[i]);
+			sms->sms_usedpa[i] = ~0;
+			sms->sms_usedva[i] = ~0;
+		}
+	}
 
 	dva = sms->sms_dva;
 	len = sms->sms_loaded;
@@ -1433,51 +1467,12 @@ smmu_dmamap_create(bus_dma_tag_t t, bus_size_t size, int nsegments,
 	}
 
 	if (flags & BUS_DMA_BOUNCE) {
-		sms->sms_size = 2 * nsegments * PAGE_SIZE;
-		if (sms->sms_size > 8 * PAGE_SIZE)
-			sms->sms_size = 8 * PAGE_SIZE;
-
-		error = bus_dmamap_create(sc->sc_dmat, sms->sms_size,
-		    1, sms->sms_size, 0, flags, &sms->sms_map);
-		if (error != 0) {
-			smmu_dmamap_destroy(t, map);
-			return error;
-		}
-
-		error = bus_dmamem_alloc(sc->sc_dmat, sms->sms_size,
-		    PAGE_SIZE, 0, &sms->sms_seg, 1, &sms->sms_nseg, flags);
-		if (error != 0) {
-			bus_dmamap_destroy(sc->sc_dmat, sms->sms_map);
-			smmu_dmamap_destroy(t, map);
-			return error;
-		}
-
-		error = bus_dmamem_map(sc->sc_dmat, &sms->sms_seg, sms->sms_nseg,
-		    sms->sms_size, &sms->sms_kva, flags);
-		if (error != 0) {
-			bus_dmamem_free(sc->sc_dmat, &sms->sms_seg, sms->sms_nseg);
-			bus_dmamap_destroy(sc->sc_dmat, sms->sms_map);
-			smmu_dmamap_destroy(t, map);
-			return error;
-		}
-
-		error = bus_dmamap_load(sc->sc_dmat, sms->sms_map, sms->sms_kva,
-		    sms->sms_size, NULL, flags);
-		if (error != 0) {
-			bus_dmamem_unmap(sc->sc_dmat, sms->sms_kva, sms->sms_size);
-			bus_dmamem_free(sc->sc_dmat, &sms->sms_seg, sms->sms_nseg);
-			bus_dmamap_destroy(sc->sc_dmat, sms->sms_map);
-			smmu_dmamap_destroy(t, map);
-			return error;
-		}
-
-		memset(sms->sms_used, -1, (sms->sms_size / PAGE_SIZE) * sizeof(vaddr_t));
-
+		memset(sms->sms_usedpa, -1, 8 * sizeof(vaddr_t));
+		memset(sms->sms_usedva, -1, 8 * sizeof(vaddr_t));
 		sms->sms_bounce = 1;
 	}
 
 	dom->sd_memory += sizeof(*sms);
-	dom->sd_memory += 2 * PAGE_SIZE;
 	map->_dm_cookie = sms;
 	*dmamap = map;
 	return 0;
@@ -1504,20 +1499,12 @@ smmu_dmamap_destroy(bus_dma_tag_t t, bus_dmamap_t map)
 		len -= PAGE_SIZE;
 	}
 
-	if (sms->sms_bounce) {
-		bus_dmamap_unload(sc->sc_dmat, sms->sms_map);
-		bus_dmamem_unmap(sc->sc_dmat, sms->sms_kva, sms->sms_size);
-		bus_dmamem_free(sc->sc_dmat, &sms->sms_seg, sms->sms_nseg);
-		bus_dmamap_destroy(sc->sc_dmat, sms->sms_map);
-	}
-
 	mtx_enter(&dom->sd_iova_mtx);
 	error = extent_free(dom->sd_iovamap, sms->sms_dva,
 	    sms->sms_len + PAGE_SIZE, EX_NOWAIT);
 	mtx_leave(&dom->sd_iova_mtx);
 	KASSERT(error == 0);
 
-	dom->sd_memory -= 2 * PAGE_SIZE;
 	dom->sd_memory -= sizeof(*sms);
 	free(sms, M_DEVBUF, sizeof(*sms));
 	sc->sc_dmat->_dmamap_destroy(sc->sc_dmat, map);
@@ -1536,7 +1523,7 @@ smmu_dmamap_load(bus_dma_tag_t t, bus_dmamap_t map, void *buf,
 	if (error)
 		return error;
 
-	error = smmu_load_map(dom, map);
+	error = smmu_load_map(dom, map, flags);
 	if (error)
 		sc->sc_dmat->_dmamap_unload(sc->sc_dmat, map);
 
@@ -1556,7 +1543,7 @@ smmu_dmamap_load_mbuf(bus_dma_tag_t t, bus_dmamap_t map, struct mbuf *m0,
 	if (error)
 		return error;
 
-	error = smmu_load_map(dom, map);
+	error = smmu_load_map(dom, map, flags);
 	if (error)
 		sc->sc_dmat->_dmamap_unload(sc->sc_dmat, map);
 
@@ -1576,7 +1563,7 @@ smmu_dmamap_load_uio(bus_dma_tag_t t, bus_dmamap_t map, struct uio *uio,
 	if (error)
 		return error;
 
-	error = smmu_load_map(dom, map);
+	error = smmu_load_map(dom, map, flags);
 	if (error)
 		sc->sc_dmat->_dmamap_unload(sc->sc_dmat, map);
 
@@ -1596,7 +1583,7 @@ smmu_dmamap_load_raw(bus_dma_tag_t t, bus_dmamap_t map, bus_dma_segment_t *segs,
 	if (error)
 		return error;
 
-	error = smmu_load_map(dom, map);
+	error = smmu_load_map(dom, map, flags);
 	if (error)
 		sc->sc_dmat->_dmamap_unload(sc->sc_dmat, map);
 
@@ -1617,33 +1604,32 @@ int
 smmu_dmamap_sync_segment(bus_dma_tag_t t, bus_dmamap_t map, vaddr_t va,
     paddr_t pa, vsize_t len, int ops)
 {
-	struct smmu_domain *dom = t->_cookie;
-	struct smmu_softc *sc = dom->sd_sc;
 	struct smmu_map_state *sms = map->_dm_cookie;
 	int i;
 
-	for (i = 0; i < (sms->sms_size / PAGE_SIZE); i++) {
-		if (sms->sms_used[i] == -1)
+	for (i = 0; i < 8; i++) {
+		if (sms->sms_usedpa[i] == -1)
 			break;
-		if (sms->sms_used[i] == trunc_page(pa))
+		if (sms->sms_usedpa[i] == trunc_page(pa))
 			break;
 	}
 
-	if (i >= (sms->sms_size / PAGE_SIZE) || sms->sms_used[i] == -1) {
+	if (i >= 8 || sms->sms_usedpa[i] == -1) {
 		printf("%s: no bounce for dva %lx\n", __func__, pa);
 		return 0;
 	}
 
 	if (ops & BUS_DMASYNC_PREWRITE) {
 		KASSERT(va >= VM_MIN_KERNEL_ADDRESS);
-		memcpy(sms->sms_kva + i * PAGE_SIZE + (va & PAGE_MASK), (char *)va, len);
+		memcpy((char *)sms->sms_usedva[i] + (va & PAGE_MASK), (char *)va, len);
 	}
 
-	bus_dmamap_sync(sc->sc_dmat, sms->sms_map, i * PAGE_SIZE + (va & PAGE_MASK), len, ops);
+//	bus_dmamap_sync(sc->sc_dmat, sms->sms_map, i * PAGE_SIZE + (va & PAGE_MASK), len, ops);
+	membar_sync();
 
 	if (ops & BUS_DMASYNC_POSTREAD) {
 		KASSERT(va >= VM_MIN_KERNEL_ADDRESS);
-		memcpy((char *)va, sms->sms_kva + i * PAGE_SIZE + (va & PAGE_MASK), len);
+		memcpy((char *)va, (char *)sms->sms_usedva[i] + (va & PAGE_MASK), len);
 	}
 
 	return 1;

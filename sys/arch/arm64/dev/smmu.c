@@ -986,7 +986,7 @@ smmu_vp_enter(struct smmu_domain *dom, vaddr_t va, struct pte_desc *pted,
 					mtx_leave(&dom->sd_pmap_mtx);
 					return ENOMEM;
 				}
-				dom->sd_memory += sizeof(struct smmuvp0);
+				atomic_add_long(&dom->sd_memory, sizeof(struct smmuvp0));
 				smmu_set_l1(dom, va, vp1);
 			}
 			mtx_leave(&dom->sd_pmap_mtx);
@@ -1005,7 +1005,7 @@ smmu_vp_enter(struct smmu_domain *dom, vaddr_t va, struct pte_desc *pted,
 				mtx_leave(&dom->sd_pmap_mtx);
 				return ENOMEM;
 			}
-			dom->sd_memory += sizeof(struct smmuvp0);
+			atomic_add_long(&dom->sd_memory, sizeof(struct smmuvp0));
 			smmu_set_l2(dom, va, vp1, vp2);
 		}
 		mtx_leave(&dom->sd_pmap_mtx);
@@ -1021,7 +1021,7 @@ smmu_vp_enter(struct smmu_domain *dom, vaddr_t va, struct pte_desc *pted,
 				mtx_leave(&dom->sd_pmap_mtx);
 				return ENOMEM;
 			}
-			dom->sd_memory += sizeof(struct smmuvp0);
+			atomic_add_long(&dom->sd_memory, sizeof(struct smmuvp0));
 			smmu_set_l3(dom, va, vp2, vp3);
 		}
 		mtx_leave(&dom->sd_pmap_mtx);
@@ -1189,13 +1189,12 @@ smmu_enter(struct smmu_domain *dom, vaddr_t va, paddr_t pa, vm_prot_t prot,
 			error = ENOMEM;
 			goto out;
 		}
-		dom->sd_memory += sizeof(struct pte_desc);
 		if (smmu_vp_enter(dom, va, pted, flags)) {
-			dom->sd_memory -= sizeof(struct pte_desc);
 			pool_put(&sc->sc_pted_pool, pted);
 			error = ENOMEM;
 			goto out;
 		}
+		atomic_add_long(&dom->sd_memory, sizeof(struct pte_desc));
 	}
 
 	smmu_fill_pte(dom, va, pa, pted, prot, flags, cache);
@@ -1356,7 +1355,8 @@ smmu_dmamap_create(bus_dma_tag_t t, bus_size_t size, int nsegments,
 		sc->sc_dmat->_dmamap_destroy(sc->sc_dmat, map);
 		return ENOMEM;
 	}
-	dom->sd_memory += sizeof(*sms);
+
+	atomic_add_long(&dom->sd_memory, sizeof(*sms));
 
 	/* Approximation of maximum pages needed. */
 	len = round_page(size) + nsegments * PAGE_SIZE;
@@ -1368,7 +1368,7 @@ smmu_dmamap_create(bus_dma_tag_t t, bus_size_t size, int nsegments,
 	mtx_leave(&dom->sd_iova_mtx);
 	if (error) {
 		sc->sc_dmat->_dmamap_destroy(sc->sc_dmat, map);
-		dom->sd_memory -= sizeof(*sms);
+		atomic_sub_long(&dom->sd_memory, sizeof(*sms));
 		free(sms, M_DEVBUF, sizeof(*sms));
 		return error;
 	}
@@ -1415,7 +1415,7 @@ smmu_dmamap_create(bus_dma_tag_t t, bus_size_t size, int nsegments,
 		sms->sms_bounce = 1;
 	}
 
-	dom->sd_memory += sms->sms_len - sms->sms_nsegs * PAGE_SIZE;
+	atomic_add_long(&dom->sd_memory, sms->sms_len - sms->sms_nsegs * PAGE_SIZE);
 	map->_dm_cookie = sms;
 	*dmamap = map;
 	return 0;
@@ -1454,8 +1454,7 @@ smmu_dmamap_destroy(bus_dma_tag_t t, bus_dmamap_t map)
 	mtx_leave(&dom->sd_iova_mtx);
 	KASSERT(error == 0);
 
-	dom->sd_memory -= sms->sms_len - sms->sms_nsegs * PAGE_SIZE;
-	dom->sd_memory -= sizeof(*sms);
+	atomic_sub_long(&dom->sd_memory, (sms->sms_len - sms->sms_nsegs * PAGE_SIZE) + sizeof(*sms));
 	free(sms, M_DEVBUF, sizeof(*sms));
 	sc->sc_dmat->_dmamap_destroy(sc->sc_dmat, map);
 }

@@ -51,6 +51,7 @@ struct smmu_map_state {
 	bus_addr_t		sms_dva;
 	bus_size_t		sms_len;
 	bus_size_t		sms_loaded;
+	uint32_t		sms_usedlen;
 
 	/* bounce buffer */
 	int			sms_bounce;
@@ -1280,8 +1281,6 @@ smmu_load_map(struct smmu_domain *dom, bus_dmamap_t map)
 	if (sms->sms_bounce)
 		bpa = sms->sms_map->dm_segs[0].ds_addr;
 
-	TRACEPOINT(smmu, load_map, dom->sd_memory, 0, 0);
-
 	maplen = 0;
 	for (seg = 0; seg < map->dm_nsegs; seg++) {
 		paddr_t pa = map->dm_segs[seg]._ds_paddr;
@@ -1346,6 +1345,10 @@ smmu_load_map(struct smmu_domain *dom, bus_dmamap_t map)
 		}
 	}
 
+	sms->sms_usedlen = used * PAGE_SIZE;
+	dom->sd_memory += sms->sms_usedlen;
+	TRACEPOINT(smmu, load_map, dom->sd_memory, 0, 0);
+
 	return 0;
 }
 
@@ -1372,6 +1375,9 @@ smmu_unload_map(struct smmu_domain *dom, bus_dmamap_t map)
 
 	smmu_tlb_sync_context(dom);
 	sms->sms_loaded = 0;
+
+	dom->sd_memory -= sms->sms_usedlen;
+	sms->sms_usedlen = 0;
 }
 
 int
@@ -1467,7 +1473,7 @@ smmu_dmamap_create(bus_dma_tag_t t, bus_size_t size, int nsegments,
 	}
 
 	dom->sd_memory += sizeof(*sms);
-	dom->sd_memory += sms->sms_size;
+	dom->sd_memory += 2 * PAGE_SIZE;
 	map->_dm_cookie = sms;
 	*dmamap = map;
 	return 0;
@@ -1507,7 +1513,7 @@ smmu_dmamap_destroy(bus_dma_tag_t t, bus_dmamap_t map)
 	mtx_leave(&dom->sd_iova_mtx);
 	KASSERT(error == 0);
 
-	dom->sd_memory -= sms->sms_size;
+	dom->sd_memory -= 2 * PAGE_SIZE;
 	dom->sd_memory -= sizeof(*sms);
 	free(sms, M_DEVBUF, sizeof(*sms));
 	sc->sc_dmat->_dmamap_destroy(sc->sc_dmat, map);

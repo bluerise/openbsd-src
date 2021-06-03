@@ -126,5 +126,6 @@ smmu_acpi_attach(struct device *parent, struct device *self, void *aux)
 	as->as_node = node;
 	as->as_cookie = sc;
 	as->as_map = smmu_device_map;
+	as->as_reserve = smmu_reserve_region;
 	acpiiort_smmu_register(as);
 }

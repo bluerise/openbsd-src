@@ -1155,9 +1155,15 @@ dwpcie_probe_device_hook(void *v, struct pci_attach_args *pa)
 {
 	struct dwpcie_softc *sc = v;
 	uint16_t rid;
+	int i;
 
 	rid = pci_requester_id(pa->pa_pc, pa->pa_tag);
 	pa->pa_dmat = iommu_device_map_pci(sc->sc_node, rid, pa->pa_dmat);
+
+	for (i = 0; i < sc->sc_nranges; i++) {
+		iommu_reserve_region_pci(sc->sc_node, rid,
+		    sc->sc_ranges[i].pci_base, sc->sc_ranges[i].size);
+	}
 
 	return 0;
 }

@@ -750,9 +750,12 @@ smmu_domain_create(struct smmu_softc *sc, uint32_t sid)
 
 	snprintf(dom->sd_exname, sizeof(dom->sd_exname), "%s:%x",
 	    sc->sc_dev.dv_xname, sid);
-	dom->sd_iovamap = extent_create(dom->sd_exname, PAGE_SIZE,
+	dom->sd_iovamap = extent_create(dom->sd_exname, 0,
 	    (1LL << iovabits) - 1, M_DEVBUF, NULL, 0, EX_WAITOK |
 	    EX_NOCOALESCE);
+
+	/* Reserve first page (to catch NULL access) */
+	extent_alloc_region(dom->sd_iovamap, 0, PAGE_SIZE, EX_WAITOK);
 
 #if 0
 	/* FIXME PCIe address space */
@@ -767,6 +770,23 @@ smmu_domain_create(struct smmu_softc *sc, uint32_t sid)
 
 	SIMPLEQ_INSERT_TAIL(&sc->sc_domains, dom, sd_list);
 	return dom;
+}
+
+void
+smmu_reserve_region(void *cookie, uint32_t sid, bus_addr_t addr,
+    bus_size_t size)
+{
+	struct smmu_softc *sc = cookie;
+	struct smmu_domain *dom;
+
+	dom = smmu_domain_lookup(sc, sid);
+	if (dom == NULL)
+		return;
+
+	printf("%s:%d: sid %x %lx %zx\n", __func__, __LINE__,
+	    sid, addr, size);
+	extent_alloc_region(dom->sd_iovamap, addr, size,
+	    EX_WAITOK | EX_CONFLICTOK);
 }
 
 /* basically pmap follows */

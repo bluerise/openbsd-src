@@ -28,8 +28,11 @@ struct acpiiort_smmu {
 	void			*as_cookie;
 	bus_dma_tag_t		(*as_map)(void *, uint32_t,
 				    bus_dma_tag_t);
+	void			(*as_reserve)(void *, uint32_t,
+				    bus_addr_t, bus_size_t);
 };
 
 void acpiiort_smmu_register(struct acpiiort_smmu *);
 bus_dma_tag_t acpiiort_smmu_map(struct acpi_iort_node *, uint32_t, bus_dma_tag_t);
+void acpiiort_smmu_reserve_region(struct acpi_iort_node *, uint32_t, bus_addr_t, bus_size_t);
 bus_dma_tag_t acpiiort_device_map(struct aml_node *, bus_dma_tag_t);

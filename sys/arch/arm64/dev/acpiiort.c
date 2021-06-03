@@ -103,6 +103,20 @@ acpiiort_smmu_map(struct acpi_iort_node *node, uint32_t rid,
 	return dmat;
 }
 
+void
+acpiiort_smmu_reserve_region(struct acpi_iort_node *node, uint32_t rid,
+    bus_addr_t addr, bus_size_t size)
+{
+	struct acpiiort_smmu *as;
+
+	SIMPLEQ_FOREACH(as, &acpiiort_smmu_list, as_list) {
+		if (as->as_node == node) {
+			as->as_reserve(as->as_cookie, rid, addr, size);
+			return;
+		}
+	}
+}
+
 bus_dma_tag_t
 acpiiort_device_map(struct aml_node *root, bus_dma_tag_t dmat)
 {

@@ -1014,3 +1014,32 @@ iommu_device_map_pci(int node, uint32_t rid, bus_dma_tag_t dmat)
 
 	return iommu_device_do_map(phandle, &sid, dmat);
 }
+
+void
+iommu_device_do_reserve(uint32_t phandle, uint32_t *cells, bus_addr_t addr,
+    bus_size_t size)
+{
+	struct iommu_device *id;
+
+	if (phandle == 0)
+		return;
+
+	LIST_FOREACH(id, &iommu_devices, id_list) {
+		if (id->id_phandle == phandle) {
+			id->id_reserve(id->id_cookie, cells, addr, size);
+			break;
+		}
+	}
+}
+
+void
+iommu_reserve_region_pci(int node, uint32_t rid, bus_addr_t addr,
+    bus_size_t size)
+{
+	uint32_t phandle, sid;
+
+	if (iommu_device_lookup_pci(node, rid, &phandle, &sid))
+		return;
+
+	return iommu_device_do_reserve(phandle, &sid, addr, size);
+}

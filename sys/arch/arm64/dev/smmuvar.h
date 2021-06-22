@@ -73,6 +73,7 @@ struct smmu_softc {
 	int			  sc_coherent;
 	struct pool		  sc_pted_pool;
 	struct pool		  sc_vp_pool;
+	struct pool		  sc_vp3_pool;
 	SIMPLEQ_HEAD(, smmu_domain) sc_domains;
 };
 

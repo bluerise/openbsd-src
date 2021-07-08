@@ -145,16 +145,48 @@
 #define  IMX8MM_GPR_PCIE_REF_CLK_PLL			(0x3 << 24)
 #define  IMX8MM_GPR_PCIE_REF_CLK_EXT			(0x2 << 24)
 
+#define IMX8MP_PCIE_PHY_CMN_REG20			0x80
+#define  IMX8MP_PCIE_PHY_CMN_REG20_PLL_LPF_R_SEL_FINE_0_4	0x04
+#define IMX8MP_PCIE_PHY_CMN_REG61			0x184
+#define  IMX8MP_PCIE_PHY_CMN_REG61_PLL_CLK_EN			0x01
 #define IMX8MM_PCIE_PHY_CMN_REG62			0x188
 #define  IMX8MM_PCIE_PHY_CMN_REG62_PLL_CLK_OUT			0x08
+#define IMX8MP_PCIE_PHY_CMN_REG63			0x18c
+#define  IMX8MP_PCIE_PHY_CMN_REG63_PLL_SYS			(0x3 << 6)
 #define IMX8MM_PCIE_PHY_CMN_REG64			0x190
 #define  IMX8MM_PCIE_PHY_CMN_REG64_AUX_RX_TX_TERM		0x8c
+#define IMX8MP_PCIE_PHY_CMN_REG65			0x194
+#define  IMX8MP_PCIE_PHY_CMN_REG65_AUX_RX_TX_TERM		0x9f
 #define IMX8MM_PCIE_PHY_CMN_REG75			0x1d4
 #define  IMX8MM_PCIE_PHY_CMN_REG75_PLL_DONE			0x3
 #define IMX8MM_PCIE_PHY_TRSV_REG5			0x414
 #define  IMX8MM_PCIE_PHY_TRSV_REG5_GEN1_DEEMP			0x2d
 #define IMX8MM_PCIE_PHY_TRSV_REG6			0x418
 #define  IMX8MM_PCIE_PHY_TRSV_REG6_GEN2_DEEMP			0xf
+#define IMX8MP_PCIE_PHY_CMN_REG76			0x200
+#define  IMX8MP_PCIE_PHY_CMN_REG76_LANE_RESET_MUX		0x0
+#define IMX8MP_PCIE_PHY_CMN_REG78			0x208
+#define  IMX8MP_PCIE_PHY_CMN_REG78_TX_DATA_CLK_MUX		0x0
+#define IMX8MP_PCIE_PHY_PCS				0x8188
+#define  IMX8MP_PCIE_PHY_PCS_PLL_DONE				(1 << 0)
+
+#define IMX8MP_GPR_REG0				0x00
+#define  IMX8MP_GPR_REG0_CLK_MOD_EN			(1 << 0)
+#define  IMX8MP_GPR_REG0_PHY_APB_RST			(1 << 4)
+#define  IMX8MP_GPR_REG0_PHY_INIT_RST			(1 << 5)
+#define IMX8MP_GPR_REG1				0x04
+#define  IMX8MP_GPR_REG1_PM_EN_CORE_CLK			(1 << 0)
+#define  IMX8MP_GPR_REG1_PLL_LOCK			(1 << 13)
+#define IMX8MP_GPR_REG2				0x08
+#define  IMX8MP_GPR_REG2_P_PLL				(0xc << 0)
+#define  IMX8MP_GPR_REG2_P_PLL_MASK			(0x3f << 0)
+#define  IMX8MP_GPR_REG2_M_PLL				(0x320 << 6)
+#define  IMX8MP_GPR_REG2_M_PLL_MASK			(0x3ff << 6)
+#define  IMX8MP_GPR_REG2_S_PLL				(0x4 << 16)
+#define  IMX8MP_GPR_REG2_S_PLL_MASK			(0x7 << 16)
+#define IMX8MP_GPR_REG3				0x0c
+#define  IMX8MP_GPR_REG3_PLL_CKE			(1 << 17)
+#define  IMX8MP_GPR_REG3_PLL_RST			(1 << 31)
 
 #define ANATOP_PLLOUT_CTL			0x74
 #define  ANATOP_PLLOUT_CTL_CKE				(1 << 4)
@@ -252,6 +284,7 @@ dwpcie_match(struct device *parent, void *match, void *aux)
 	return (OF_is_compatible(faa->fa_node, "amlogic,g12a-pcie") ||
 	    OF_is_compatible(faa->fa_node, "marvell,armada8k-pcie") ||
 	    OF_is_compatible(faa->fa_node, "fsl,imx8mm-pcie") ||
+	    OF_is_compatible(faa->fa_node, "fsl,imx8mp-pcie") ||
 	    OF_is_compatible(faa->fa_node, "fsl,imx8mq-pcie") ||
 	    OF_is_compatible(faa->fa_node, "sifive,fu740-pcie"));
 }
@@ -431,6 +464,7 @@ dwpcie_attach_deferred(struct device *self)
 	if (OF_is_compatible(sc->sc_node, "amlogic,g12a-pcie"))
 		error = dwpcie_g12a_init(sc);
 	if (OF_is_compatible(sc->sc_node, "fsl,imx8mm-pcie") ||
+	    OF_is_compatible(sc->sc_node, "fsl,imx8mp-pcie") ||
 	    OF_is_compatible(sc->sc_node, "fsl,imx8mq-pcie"))
 		error = dwpcie_imx8mq_init(sc);
 	if (OF_is_compatible(sc->sc_node, "sifive,fu740-pcie"))
@@ -820,7 +854,7 @@ dwpcie_imx8mq_init(struct dwpcie_softc *sc)
 {
 	uint32_t *clkreq_gpio, *disable_gpio, *reset_gpio;
 	ssize_t clkreq_gpiolen, disable_gpiolen, reset_gpiolen;
-	struct regmap *anatop, *gpr, *phy;
+	struct regmap *anatop, *gpr, *hsmix, *phy;
 	uint32_t off, reg;
 	int error, timo;
 
@@ -828,6 +862,12 @@ dwpcie_imx8mq_init(struct dwpcie_softc *sc)
 		anatop = regmap_bycompatible("fsl,imx8mm-anatop");
 		gpr = regmap_bycompatible("fsl,imx8mm-iomuxc-gpr");
 		phy = regmap_bycompatible("fsl,imx7d-pcie-phy");
+		KASSERT(phy != NULL);
+	} else if (OF_is_compatible(sc->sc_node, "fsl,imx8mp-pcie")) {
+		gpr = regmap_bycompatible("fsl,imx8mp-iomuxc-gpr");
+		hsmix = regmap_bycompatible("fsl,imx8mp-hsio-mix");
+		phy = regmap_bycompatible("fsl,imx8mp-pcie-phy");
+		KASSERT(hsmix != NULL);
 		KASSERT(phy != NULL);
 	} else {
 		anatop = regmap_bycompatible("fsl,imx8mq-anatop");
@@ -865,8 +905,11 @@ dwpcie_imx8mq_init(struct dwpcie_softc *sc)
 	}
 
 	power_domain_enable(sc->sc_node);
-	reset_assert(sc->sc_node, "pciephy");
+	if (!OF_is_compatible(sc->sc_node, "fsl,imx8mp-pcie"))
+		reset_assert(sc->sc_node, "pciephy");
 	reset_assert(sc->sc_node, "apps");
+	reset_assert(sc->sc_node, "pciephy");
+	reset_assert(sc->sc_node, "pciephy_perst");
 
 	reg = regmap_read_4(gpr, IOMUXC_GPR12);
 	if (OF_getpropint(sc->sc_node, "ctrl-id", 0) == 0) {
@@ -919,6 +962,8 @@ dwpcie_imx8mq_init(struct dwpcie_softc *sc)
 			regmap_write_4(phy, IMX8MM_PCIE_PHY_TRSV_REG6,
 			    IMX8MM_PCIE_PHY_TRSV_REG6_GEN2_DEEMP);
 		}
+	} else if (OF_is_compatible(sc->sc_node, "fsl,imx8mp-pcie")) {
+		/* enable PHY */
 	} else {
 		if (OF_getproplen(sc->sc_node, "ext_osc") == 0 ||
 		    OF_getpropint(sc->sc_node, "ext_osc", 0)) {
@@ -946,6 +991,39 @@ dwpcie_imx8mq_init(struct dwpcie_softc *sc)
 	/* Allow clocks to stabilize. */
 	delay(200);
 
+	if (OF_is_compatible(sc->sc_node, "fsl,imx8mp-pcie")) {
+		reg = regmap_read_4(hsmix, IMX8MP_GPR_REG2);
+		reg &= ~(IMX8MP_GPR_REG2_P_PLL_MASK |
+		    IMX8MP_GPR_REG2_M_PLL_MASK |
+		    IMX8MP_GPR_REG2_S_PLL_MASK);
+		reg |= (IMX8MP_GPR_REG2_P_PLL |
+		    IMX8MP_GPR_REG2_M_PLL |
+		    IMX8MP_GPR_REG2_S_PLL);
+		regmap_write_4(hsmix, IMX8MP_GPR_REG2, reg);
+		delay(1);
+		reg = regmap_read_4(hsmix, IMX8MP_GPR_REG3);
+		reg |= IMX8MP_GPR_REG3_PLL_RST;
+		regmap_write_4(hsmix, IMX8MP_GPR_REG3, reg);
+		delay(10);
+		reg = regmap_read_4(hsmix, IMX8MP_GPR_REG3);
+		reg |= IMX8MP_GPR_REG3_PLL_CKE;
+		regmap_write_4(hsmix, IMX8MP_GPR_REG3, reg);
+		for (timo = 100; timo > 0; timo--) {
+			if (regmap_read_4(hsmix, IMX8MP_GPR_REG1) &
+			    IMX8MP_GPR_REG1_PLL_LOCK)
+				break;
+			delay(10);
+		}
+		if (timo == 0) {
+			printf("%s:%d\n", __func__, __LINE__);
+			error = ETIMEDOUT;
+			goto err;
+		}
+		reg = regmap_read_4(hsmix, IMX8MP_GPR_REG0);
+		reg |= IMX8MP_GPR_REG0_CLK_MOD_EN;
+		regmap_write_4(hsmix, IMX8MP_GPR_REG0, reg);
+	}
+
 	if (reset_gpiolen > 0) {
 		gpio_controller_set_pin(reset_gpio, 1);
 		delay(100000);
@@ -953,6 +1031,7 @@ dwpcie_imx8mq_init(struct dwpcie_softc *sc)
 	}
 
 	reset_deassert(sc->sc_node, "pciephy");
+	reset_deassert(sc->sc_node, "pciephy_perst");
 
 	if (OF_is_compatible(sc->sc_node, "fsl,imx8mm-pcie")) {
 		for (timo = 2000; timo > 0; timo--) {
@@ -962,6 +1041,79 @@ dwpcie_imx8mq_init(struct dwpcie_softc *sc)
 			delay(10);
 		}
 		if (timo == 0) {
+			error = ETIMEDOUT;
+			goto err;
+		}
+	} else if (OF_is_compatible(sc->sc_node, "fsl,imx8mp-pcie")) {
+		reg = regmap_read_4(hsmix, IMX8MP_GPR_REG0);
+		reg |= (IMX8MP_GPR_REG0_PHY_APB_RST |
+		    IMX8MP_GPR_REG0_PHY_INIT_RST);
+		regmap_write_4(hsmix, IMX8MP_GPR_REG0, reg);
+		if (OF_getproplen(sc->sc_node, "ext_osc") == 0 ||
+		    OF_getpropint(sc->sc_node, "ext_osc", 0)) {
+			reg = regmap_read_4(gpr, off);
+			reg &= ~(IMX8MM_GPR_PCIE_SSC_EN |
+			    IMX8MM_GPR_PCIE_POWER_OFF |
+			    IMX8MM_GPR_PCIE_CMN_RST |
+			    IMX8MM_GPR_PCIE_REF_CLK_MASK);
+			reg |= (IMX8MM_GPR_PCIE_AUX_EN |
+			    IMX8MM_GPR_PCIE_REF_CLK_EXT);
+			regmap_write_4(gpr, off, reg);
+			delay(100);
+		} else {
+			reg = regmap_read_4(gpr, off);
+			reg &= ~(IMX8MM_GPR_PCIE_SSC_EN |
+			    IMX8MM_GPR_PCIE_POWER_OFF |
+			    IMX8MM_GPR_PCIE_CMN_RST |
+			    IMX8MM_GPR_PCIE_REF_CLK_MASK);
+			reg |= (IMX8MM_GPR_PCIE_AUX_EN |
+			    IMX8MM_GPR_PCIE_REF_CLK_PLL);
+			regmap_write_4(gpr, off, reg);
+			delay(100);
+		}
+		/* TODO: phy calibrate */
+		if (OF_getproplen(sc->sc_node, "ext_osc") < 0 ||
+		    OF_getpropint(sc->sc_node, "ext_osc", 0) == 0) {
+			regmap_write_4(phy, IMX8MP_PCIE_PHY_CMN_REG61,
+			    IMX8MP_PCIE_PHY_CMN_REG61_PLL_CLK_EN);
+			regmap_write_4(phy, IMX8MM_PCIE_PHY_CMN_REG62,
+			    IMX8MM_PCIE_PHY_CMN_REG62_PLL_CLK_OUT);
+			regmap_write_4(phy, IMX8MP_PCIE_PHY_CMN_REG63,
+			    IMX8MP_PCIE_PHY_CMN_REG63_PLL_SYS);
+			regmap_write_4(phy, IMX8MM_PCIE_PHY_CMN_REG64,
+			    IMX8MM_PCIE_PHY_CMN_REG64_AUX_RX_TX_TERM);
+			regmap_write_4(phy, IMX8MP_PCIE_PHY_CMN_REG65,
+			    IMX8MP_PCIE_PHY_CMN_REG65_AUX_RX_TX_TERM);
+		}
+		regmap_write_4(phy, IMX8MP_PCIE_PHY_CMN_REG20,
+		    IMX8MP_PCIE_PHY_CMN_REG20_PLL_LPF_R_SEL_FINE_0_4);
+		regmap_write_4(phy, IMX8MP_PCIE_PHY_CMN_REG76,
+		    IMX8MP_PCIE_PHY_CMN_REG76_LANE_RESET_MUX);
+		regmap_write_4(phy, IMX8MP_PCIE_PHY_CMN_REG78,
+		    IMX8MP_PCIE_PHY_CMN_REG78_TX_DATA_CLK_MUX);
+		reg = regmap_read_4(gpr, off);
+		reg |= IMX8MM_GPR_PCIE_CMN_RST;
+		regmap_write_4(gpr, off, reg);
+		delay(200);
+		for (timo = 2000; timo > 0; timo--) {
+			if (regmap_read_4(hsmix, IMX8MP_PCIE_PHY_PCS)  ==
+			    IMX8MP_PCIE_PHY_PCS_PLL_DONE)
+				break;
+			delay(10);
+		}
+		if (timo == 0) {
+			printf("%s:%d\n", __func__, __LINE__);
+			error = ETIMEDOUT;
+			goto err;
+		}
+		for (timo = 2000; timo > 0; timo--) {
+			if (regmap_read_4(hsmix, IMX8MP_GPR_REG1) &
+			    IMX8MP_GPR_REG1_PM_EN_CORE_CLK)
+				break;
+			delay(10);
+		}
+		if (timo == 0) {
+			printf("%s:%d\n", __func__, __LINE__);
 			error = ETIMEDOUT;
 			goto err;
 		}
@@ -987,6 +1139,7 @@ dwpcie_imx8mq_init(struct dwpcie_softc *sc)
 		delay(10);
 	}
 	if (timo == 0) {
+		printf("%s:%d\n", __func__, __LINE__);
 		error = ETIMEDOUT;
 		goto err;
 	}
@@ -1007,6 +1160,7 @@ dwpcie_imx8mq_init(struct dwpcie_softc *sc)
 			delay(10);
 		}
 		if (timo == 0) {
+			printf("%s:%d\n", __func__, __LINE__);
 			error = ETIMEDOUT;
 			goto err;
 		}

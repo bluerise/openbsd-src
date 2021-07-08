@@ -71,6 +71,7 @@ imxiomuxc_match(struct device *parent, void *match, void *aux)
 	    OF_is_compatible(faa->fa_node, "fsl,imx6ul-iomuxc") ||
 	    OF_is_compatible(faa->fa_node, "fsl,imx7d-iomuxc") ||
 	    OF_is_compatible(faa->fa_node, "fsl,imx8mm-iomuxc") ||
+	    OF_is_compatible(faa->fa_node, "fsl,imx8mp-iomuxc") ||
 	    OF_is_compatible(faa->fa_node, "fsl,imx8mq-iomuxc"));
 }
 

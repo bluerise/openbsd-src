@@ -125,7 +125,8 @@ imxsrc_match(struct device *parent, void *match, void *aux)
 	struct fdt_attach_args *faa = aux;
 
 	if (OF_is_compatible(faa->fa_node, "fsl,imx51-src") ||
-	    OF_is_compatible(faa->fa_node, "fsl,imx8mq-src"))		
+	    OF_is_compatible(faa->fa_node, "fsl,imx8mp-src") ||
+	    OF_is_compatible(faa->fa_node, "fsl,imx8mq-src"))
 		return 10;	/* Must beat syscon(4). */
 
 	return 0;

@@ -1780,6 +1780,14 @@ imxccm_set_frequency(void *cookie, uint32_t *cells, uint32_t freq)
 		}
 	} else if (sc->sc_divs == imx8mp_divs) {
 		switch (idx) {
+		case IMX8MP_CLK_USDHC1:
+		case IMX8MP_CLK_USDHC2:
+		case IMX8MP_CLK_USDHC3:
+			parent_freq = imxccm_imx8mm_usdhc(sc, idx);
+			return imxccm_imx8m_set_div(sc, idx, freq, parent_freq);
+		case IMX8MP_CLK_PCIE_AUX:
+			parent_freq = 50 * 1000 * 1000;
+			return imxccm_imx8m_set_div(sc, idx, freq, parent_freq);
 		case IMX8MP_CLK_ENET_QOS:
 			parent_freq = imxccm_imx8mp_enet_qos(sc, idx);
 			return imxccm_imx8m_set_div(sc, idx, freq, parent_freq);

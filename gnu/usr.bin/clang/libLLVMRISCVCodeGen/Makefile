@@ -8,6 +8,7 @@ CPPFLAGS+=	-I${.OBJDIR}/../include/llvm/RISCV \
 
 SRCS+=	RISCVAsmPrinter.cpp \
 	RISCVCallLowering.cpp \
+	RISCVCleanupVSETVLI.cpp \
 	RISCVExpandAtomicPseudoInsts.cpp\
 	RISCVExpandPseudoInsts.cpp \
 	RISCVFrameLowering.cpp \

@@ -23,9 +23,11 @@ SRCS+=	DbiModuleDescriptor.cpp \
 	NativeEnumInjectedSources.cpp \
 	NativeEnumLineNumbers.cpp \
 	NativeEnumModules.cpp \
+	NativeEnumSymbols.cpp \
 	NativeEnumTypes.cpp \
 	NativeExeSymbol.cpp \
 	NativeFunctionSymbol.cpp \
+	NativeInlineSiteSymbol.cpp \
 	NativeLineNumber.cpp \
 	NativePublicSymbol.cpp \
 	NativeRawSymbol.cpp \

@@ -34,9 +34,14 @@ SRCS+=	JITLink.cpp \
 # MCJIT
 SRCS+=	MCJIT.cpp
 
-# OrcError
+# OrcShared
 SRCS+=	OrcError.cpp \
 	RPCError.cpp \
+	TargetProcessControlTypes.cpp
+
+# OrcTragetProcess
+SRCS+=	RegisterEHFrames.cpp \
+	TargetExecutionUtils.cpp
 
 # OrcJIT
 SRCS+=	CompileOnDemandLayer.cpp \
@@ -49,22 +54,22 @@ SRCS+=	CompileOnDemandLayer.cpp \
 	IRTransformLayer.cpp \
 	JITTargetMachineBuilder.cpp \
 	LazyReexports.cpp \
-	Legacy.cpp \
 	Layer.cpp \
 	LLJIT.cpp \
 	MachOPlatform.cpp \
 	Mangling.cpp \
-	NullResolver.cpp \
 	ObjectLinkingLayer.cpp \
 	ObjectTransformLayer.cpp \
 	OrcABISupport.cpp \
-	OrcCBindings.cpp \
 	OrcV2CBindings.cpp \
-	OrcMCJITReplacement.cpp \
 	RTDyldObjectLinkingLayer.cpp \
-	ThreadSafeModule.cpp \
 	Speculation.cpp \
-	SpeculateAnalyses.cpp
+	SpeculateAnalyses.cpp \
+	TargetProcessControl.cpp \
+	ThreadSafeModule.cpp \
+	TPCDynamicLibrarySearchGenerator.cpp \
+	TPCEHFrameRegistrar.cpp \
+	TPCIndirectionUtils.cpp
 
 # RuntimeDyld
 SRCS+=	JITSymbol.cpp \
@@ -92,7 +97,8 @@ ExecutionEngineELF.cpp:
 .PATH:	${.CURDIR}/../../../llvm/llvm/lib/ExecutionEngine/JITLink
 .PATH:	${.CURDIR}/../../../llvm/llvm/lib/ExecutionEngine/MCJIT
 .PATH:	${.CURDIR}/../../../llvm/llvm/lib/ExecutionEngine/Orc
-.PATH:	${.CURDIR}/../../../llvm/llvm/lib/ExecutionEngine/OrcError
+.PATH:	${.CURDIR}/../../../llvm/llvm/lib/ExecutionEngine/Orc/Shared
+.PATH:	${.CURDIR}/../../../llvm/llvm/lib/ExecutionEngine/Orc/TargetProcess
 .PATH:	${.CURDIR}/../../../llvm/llvm/lib/ExecutionEngine/RuntimeDyld
 .PATH:	${.CURDIR}/../../../llvm/llvm/lib/ExecutionEngine/RuntimeDyld/Targets
 

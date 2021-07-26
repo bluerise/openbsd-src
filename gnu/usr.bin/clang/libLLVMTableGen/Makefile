@@ -7,13 +7,15 @@ NOPROFILE=
 CPPFLAGS+=	-I${LLVM_SRCS}/include/llvm/TableGen
 
 .include <bsd.own.mk>
-SRCS=	TableGenError.cpp \
+SRCS=	DetailedRecordsBackend.cpp \
+	TableGenError.cpp \
 	JSONBackend.cpp \
 	Main.cpp \
 	Record.cpp \
 	SetTheory.cpp \
 	StringMatcher.cpp \
 	TableGenBackend.cpp \
+	TableGenBackendSkeleton.cpp \
 	TGLexer.cpp \
 	TGParser.cpp
 

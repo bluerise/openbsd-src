@@ -30,6 +30,7 @@
 .include "../libLLVMFrontendOpenACC/Makefile"
 .include "../libLLVMFrontendOpenMP/Makefile"
 .include "../libLLVMGlobalISel/Makefile"
+.include "../libLLVMHelloNew/Makefile"
 .include "../libLLVMIRReader/Makefile"
 .include "../libLLVMInstCombine/Makefile"
 .include "../libLLVMInstrumentation/Makefile"

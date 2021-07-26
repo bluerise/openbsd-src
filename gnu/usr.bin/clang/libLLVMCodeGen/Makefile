@@ -15,12 +15,13 @@ SRCS+=	AggressiveAntiDepBreaker.cpp \
 	BranchRelaxation.cpp \
 	BreakFalseDeps.cpp \
 	BuiltinGCs.cpp \
-	BBSectionsPrepare.cpp \
+	BasicBlockSections.cpp \
 	CalcSpillWeights.cpp \
 	CallingConvLower.cpp \
 	CFGuardLongjmp.cpp \
 	CFIInstrInserter.cpp \
 	CodeGen.cpp \
+	CodeGenPassBuilder.cpp \
 	CodeGenPrepare.cpp \
 	CommandFlags.cpp \
 	CriticalAntiDepBreaker.cpp \
@@ -56,7 +57,6 @@ SRCS+=	AggressiveAntiDepBreaker.cpp \
 	LatencyPriorityQueue.cpp \
 	LazyMachineBlockFrequencyInfo.cpp \
 	LexicalScopes.cpp \
-	LiveDebugValues.cpp \
 	LiveDebugVariables.cpp \
 	LiveIntervals.cpp \
 	LiveInterval.cpp \
@@ -82,6 +82,7 @@ SRCS+=	AggressiveAntiDepBreaker.cpp \
 	MachineCombiner.cpp \
 	MachineCopyPropagation.cpp \
 	MachineCSE.cpp \
+	MachineCheckDebugify.cpp \
 	MachineDebugify.cpp \
 	MachineDominanceFrontier.cpp \
 	MachineDominators.cpp \
@@ -89,6 +90,7 @@ SRCS+=	AggressiveAntiDepBreaker.cpp \
 	MachineFunction.cpp \
 	MachineFunctionPass.cpp \
 	MachineFunctionPrinterPass.cpp \
+	MachineFunctionSplitter.cpp \
 	MachineInstrBundle.cpp \
 	MachineInstr.cpp \
 	MachineLICM.cpp \
@@ -99,6 +101,7 @@ SRCS+=	AggressiveAntiDepBreaker.cpp \
 	MachineOperand.cpp \
 	MachineOptimizationRemarkEmitter.cpp \
 	MachineOutliner.cpp \
+	MachinePassManager.cpp \
 	MachinePipeliner.cpp \
 	MachinePostDominators.cpp \
 	MachineRegionInfo.cpp \
@@ -111,6 +114,7 @@ SRCS+=	AggressiveAntiDepBreaker.cpp \
 	MachineTraceMetrics.cpp \
 	MachineVerifier.cpp \
 	ModuloSchedule.cpp \
+	MultiHazardRecognizer.cpp \
 	PatchableFunction.cpp \
 	MBFIWrapper.cpp \
 	MIRPrinter.cpp \
@@ -127,6 +131,7 @@ SRCS+=	AggressiveAntiDepBreaker.cpp \
 	PreISelIntrinsicLowering.cpp \
 	ProcessImplicitDefs.cpp \
 	PrologEpilogInserter.cpp \
+	PseudoProbeInserter.cpp \
 	PseudoSourceValue.cpp \
 	RDFGraph.cpp \
 	RDFLiveness.cpp \
@@ -142,6 +147,7 @@ SRCS+=	AggressiveAntiDepBreaker.cpp \
 	RegisterPressure.cpp \
 	RegisterScavenging.cpp \
 	RenameIndependentSubregs.cpp \
+	MachineStableHash.cpp \
 	MIRVRegNamerUtils.cpp \
 	MIRNamerPass.cpp \
 	MIRCanonicalizerPass.cpp \
@@ -153,7 +159,6 @@ SRCS+=	AggressiveAntiDepBreaker.cpp \
 	ReturnProtectorPass.cpp \
 	SafeStack.cpp \
 	SafeStackLayout.cpp \
-	ScalarizeMaskedMemIntrin.cpp \
 	ScheduleDAG.cpp \
 	ScheduleDAGInstrs.cpp \
 	ScheduleDAGPrinter.cpp \
@@ -189,7 +194,10 @@ SRCS+=	AggressiveAntiDepBreaker.cpp \
 	VirtRegMap.cpp \
 	WasmEHPrepare.cpp \
 	WinEHPrepare.cpp \
-	XRayInstrumentation.cpp
+	XRayInstrumentation.cpp \
+	LiveDebugValues.cpp \
+	VarLocBasedImpl.cpp \
+	InstrRefBasedImpl.cpp
 
 CodeGenAnalysis.cpp:
 	ln -s ${LLVM_SRCS}/lib/CodeGen/Analysis.cpp $@
@@ -198,5 +206,6 @@ CodeGenLowLevelType.cpp:
 	ln -s ${LLVM_SRCS}/lib/CodeGen/LowLevelType.cpp $@
 
 .PATH:	${.CURDIR}/../../../llvm/llvm/lib/CodeGen
+.PATH:	${.CURDIR}/../../../llvm/llvm/lib/CodeGen/LiveDebugValues
 
 CLEANFILES+= CodeGenAnalysis.cpp CodeGenLowLevelType.cpp

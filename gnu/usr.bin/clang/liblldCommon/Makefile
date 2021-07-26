@@ -19,6 +19,11 @@ SRCS=	Args.cpp \
 
 .PATH:	${.CURDIR}/../../../llvm/lld/Common
 
+BUILDFIRST=	VCSVersion.inc
+
+VCSVersion.inc:
+	touch $@
+
 install:
 	@# Nothing here so far ...
 

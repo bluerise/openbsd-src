@@ -26,6 +26,7 @@ SRCS+=	A15SDOptimizer.cpp \
 	ARMParallelDSP.cpp \
 	ARMLoadStoreOptimizer.cpp \
 	ARMLowOverheadLoops.cpp \
+	ARMBlockPlacement.cpp \
 	ARMMCInstLower.cpp \
 	ARMMachineFunctionInfo.cpp \
 	ARMMacroFusion.cpp \
@@ -33,6 +34,7 @@ SRCS+=	A15SDOptimizer.cpp \
 	ARMOptimizeBarriersPass.cpp \
 	ARMRegisterBankInfo.cpp \
 	ARMSelectionDAGInfo.cpp \
+	ARMSLSHardening.cpp \
 	ARMSubtarget.cpp \
 	ARMTargetMachine.cpp \
 	ARMTargetObjectFile.cpp \

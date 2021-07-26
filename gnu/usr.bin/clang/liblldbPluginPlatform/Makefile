@@ -13,11 +13,12 @@ SRCS=	AdbClient.cpp \
 	PlatformDarwin.cpp \
 	PlatformDarwinKernel.cpp \
 	PlatformMacOSX.cpp \
-	PlatformRemoteiOS.cpp \
+	PlatformRemoteAppleBridge.cpp \
 	PlatformRemoteAppleTV.cpp \
 	PlatformRemoteAppleWatch.cpp \
 	PlatformRemoteDarwinDevice.cpp \
-	PlatformRemoteAppleBridge.cpp \
+	PlatformRemoteMacOSX.cpp \
+	PlatformRemoteiOS.cpp \
 	PlatformNetBSD.cpp \
 	PlatformOpenBSD.cpp \
 	PlatformPOSIX.cpp \

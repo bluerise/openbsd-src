@@ -7,6 +7,7 @@ CPPFLAGS+=	-I${.OBJDIR}/../include/llvm/RISCV \
 		-I${LLVM_SRCS}/lib/Target/RISCV
 
 SRCS+=	RISCVAsmBackend.cpp \
+	RISCVBaseInfo.cpp \
 	RISCVELFObjectWriter.cpp \
 	RISCVELFStreamer.cpp \
 	RISCVInstPrinter.cpp \
@@ -14,6 +15,7 @@ SRCS+=	RISCVAsmBackend.cpp \
 	RISCVMCCodeEmitter.cpp \
 	RISCVMCExpr.cpp \
 	RISCVMCTargetDesc.cpp \
+	RISCVMatInt.cpp \
 	RISCVTargetStreamer.cpp
 
 

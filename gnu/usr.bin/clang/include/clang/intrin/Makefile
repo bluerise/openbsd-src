@@ -2,7 +2,7 @@
 
 .include <bsd.own.mk>
 
-LLVM_V=			11.1.0
+LLVM_V=			12.0.1
 CLANG_INTR_INCDIR=	/usr/lib/clang/${LLVM_V}/include
 
 TBLGEN= ${.OBJDIR}/../../../clang-tblgen/clang-tblgen
@@ -59,6 +59,7 @@ HEADERS+=	adxintrin.h \
 		avx512vnniintrin.h \
 		avx512vlvnniintrin.h \
 		avxintrin.h \
+		avxvnniintrin.h \
 		bmi2intrin.h \
 		bmiintrin.h \
 		cetintrin.h \
@@ -75,9 +76,11 @@ HEADERS+=	adxintrin.h \
 		fmaintrin.h \
 		fxsrintrin.h \
 		gfniintrin.h \
+		hresetintrin.h \
 		ia32intrin.h \
 		immintrin.h \
 		invpcidintrin.h \
+		keylockerintrin.h \
 		lwpintrin.h \
 		lzcntintrin.h \
 		mm3dnow.h \
@@ -101,6 +104,7 @@ HEADERS+=	adxintrin.h \
 		tbmintrin.h \
 		tmmintrin.h \
 		tsxldtrkintrin.h \
+		uintrintrin.h \
 		vaesintrin.h \
 		vpclmulqdqintrin.h \
 		waitpkgintrin.h \
@@ -109,6 +113,7 @@ HEADERS+=	adxintrin.h \
 		wmmintrin.h \
 		__wmmintrin_aes.h \
 		__wmmintrin_pclmul.h \
+		x86gprintrin.h \
 		x86intrin.h \
 		xmmintrin.h \
 		xopintrin.h \

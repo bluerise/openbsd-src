@@ -11,6 +11,7 @@ SRCS=	BreakpadRecords.cpp \
 	ObjectFileELF.cpp \
 	ObjectFileJIT.cpp \
 	ObjectFileMachO.cpp \
+	ObjectFilePDB.cpp \
 	ObjectFilePECOFF.cpp \
 	PECallFrameInfo.cpp \
 	WindowsMiniDump.cpp \
@@ -19,6 +20,7 @@ SRCS=	BreakpadRecords.cpp \
 .PATH:	${.CURDIR}/../../../llvm/lldb/source/Plugins/ObjectFile/Breakpad
 .PATH:	${.CURDIR}/../../../llvm/lldb/source/Plugins/ObjectFile/ELF
 .PATH:	${.CURDIR}/../../../llvm/lldb/source/Plugins/ObjectFile/Mach-O
+.PATH:	${.CURDIR}/../../../llvm/lldb/source/Plugins/ObjectFile/PDB
 .PATH:	${.CURDIR}/../../../llvm/lldb/source/Plugins/ObjectFile/PECOFF
 .PATH:	${.CURDIR}/../../../llvm/lldb/source/Plugins/ObjectFile/JIT
 .PATH:	${.CURDIR}/../../../llvm/lldb/source/Plugins/ObjectFile/wasm

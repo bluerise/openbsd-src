@@ -14,6 +14,7 @@ HDRS=	AArch64GenAsmMatcher.inc \
 	AArch64GenGlobalISel.inc \
 	AArch64GenPreLegalizeGICombiner.inc \
 	AArch64GenPostLegalizeGICombiner.inc \
+	AArch64GenPostLegalizeGILowering.inc \
 	AArch64GenInstrInfo.inc \
 	AArch64GenMCCodeEmitter.inc \
 	AArch64GenMCPseudoLowering.inc \
@@ -80,6 +81,12 @@ AArch64GenPreLegalizeGICombiner.inc: ${LLVM_SRCS}/lib/Target/AArch64/AArch64.td
 AArch64GenPostLegalizeGICombiner.inc: ${LLVM_SRCS}/lib/Target/AArch64/AArch64.td
 	${.OBJDIR}/../../../llvm-tblgen/llvm-tblgen -gen-global-isel-combiner \
 		-combiners="AArch64PostLegalizerCombinerHelper" \
+		-I${LLVM_SRCS}/include -I${LLVM_SRCS}/lib/Target/AArch64 \
+		-o ${.TARGET} ${.ALLSRC}
+
+AArch64GenPostLegalizeGILowering.inc: ${LLVM_SRCS}/lib/Target/AArch64/AArch64.td
+	${.OBJDIR}/../../../llvm-tblgen/llvm-tblgen -gen-global-isel-combiner \
+		-combiners="AArch64PostLegalizerLoweringHelper" \
 		-I${LLVM_SRCS}/include -I${LLVM_SRCS}/lib/Target/AArch64 \
 		-o ${.TARGET} ${.ALLSRC}
 

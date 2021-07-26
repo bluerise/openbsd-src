@@ -57,6 +57,12 @@
 /* Define if dladdr() is available on this platform. */
 #define HAVE_DLADDR 1
 
+/* Define to 1 if we can register EH frames on this platform. */
+#define HAVE_REGISTER_FRAME 0
+
+/* Define to 1 if we can deregister EH frames on this platform. */
+#define HAVE_DEREGISTER_FRAME 0
+
 /* Define to 1 if you have the <errno.h> header file. */
 #define HAVE_ERRNO_H 1
 
@@ -99,6 +105,9 @@
 /* Define to 1 if you have the `pfm' library (-lpfm). */
 /* #undef HAVE_LIBPFM */
 
+/* Define to 1 if the `perf_branch_entry' struct has field cycles. */
+/* #undef LIBPFM_HAS_FIELD_CYCLES */
+
 /* Define to 1 if you have the `psapi' library (-lpsapi). */
 /* #undef HAVE_LIBPSAPI */
 
@@ -110,9 +119,6 @@
 
 /* Define to 1 if you have the `pthread_setname_np' function. */
 /* #undef HAVE_PTHREAD_SETNAME_NP */
-
-/* Define to 1 if you have the `z' library (-lz). */
-#define HAVE_LIBZ 1
 
 /* Define to 1 if you have the <link.h> header file. */
 /* #undef HAVE_LINK_H */
@@ -214,7 +220,7 @@
 /* #undef HAVE_SYS_TYPES_H */
 
 /* Define if the setupterm() function is supported this platform. */
-/* #undef HAVE_TERMINFO */
+/* #undef LLVM_ENABLE_TERMINFO */
 
 /* Define if the xar_open() function is supported this platform. */
 /* #undef HAVE_LIBXAR */
@@ -227,9 +233,6 @@
 
 /* Define to 1 if you have the <valgrind/valgrind.h> header file. */
 /* #define HAVE_VALGRIND_VALGRIND_H 1 */
-
-/* Define to 1 if you have the <zlib.h> header file. */
-#define HAVE_ZLIB_H 1
 
 /* Have host's _alloca */
 /* #undef HAVE__ALLOCA */
@@ -311,7 +314,7 @@
 #define LLVM_VERSION_PRINTER_SHOW_HOST_TARGET_INFO 1
 
 /* Define if libxml2 is supported on this platform. */
-/* #undef LLVM_LIBXML2_ENABLED */
+/* #undef LLVM_ENABLE_LIBXML2 */
 
 /* Define to the extension used for shared libraries, say, ".so". */
 #define LTDL_SHLIB_EXT ".so"
@@ -323,10 +326,10 @@
 #define PACKAGE_NAME "LLVM"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "LLVM 11.1.0"
+#define PACKAGE_STRING "LLVM 12.0.1"
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "11.1.0"
+#define PACKAGE_VERSION "12.0.1"
 
 /* Define to the vendor of this package. */
 /* #undef PACKAGE_VENDOR */

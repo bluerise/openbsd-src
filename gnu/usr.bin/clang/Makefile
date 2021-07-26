@@ -10,7 +10,6 @@ SUBDIR+=libLLVMSupport
 SUBDIR+=libLLVMTableGen
 SUBDIR+=llvm-tblgen
 SUBDIR+=include/llvm/IR
-SUBDIR+=include/llvm/Transforms/InstCombine
 SUBDIR+=include/llvm/Frontend/OpenACC
 SUBDIR+=include/llvm/Frontend/OpenMP
 

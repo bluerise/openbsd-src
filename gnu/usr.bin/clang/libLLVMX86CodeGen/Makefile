@@ -11,9 +11,11 @@ SRCS+=	X86AsmPrinter.cpp \
 	X86CallingConv.cpp \
 	X86CallLowering.cpp \
 	X86CmovConversion.cpp \
-	X86CondBrFolding.cpp \
 	X86DomainReassignment.cpp \
 	X86DiscriminateMemOps.cpp \
+	X86LowerAMXType.cpp \
+	X86TileConfig.cpp \
+	X86PreTileConfig.cpp \
 	X86ExpandPseudo.cpp \
 	X86FastISel.cpp \
 	X86FixupBWInsts.cpp \
@@ -31,6 +33,7 @@ SRCS+=	X86AsmPrinter.cpp \
 	X86IndirectThunks.cpp \
 	X86InterleavedAccess.cpp \
 	X86InsertPrefetch.cpp \
+	X86InstCombineIntrinsic.cpp \
 	X86InstrFMA3Info.cpp \
 	X86InstrFoldTables.cpp \
 	X86InstrInfo.cpp \

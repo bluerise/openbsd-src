@@ -7,6 +7,7 @@ CPPFLAGS+=	-I${LLVM_SRCS}/include/llvm/Transforms
 CPPFLAGS+=	-I${LLVM_SRCS}/include/llvm/Transforms/IPO
 
 SRCS+=	AlwaysInliner.cpp \
+	Annotation2Metadata.cpp \
 	ArgumentPromotion.cpp \
 	Attributor.cpp \
 	AttributorAttributes.cpp \
@@ -25,8 +26,8 @@ SRCS+=	AlwaysInliner.cpp \
 	GlobalOpt.cpp \
 	GlobalSplit.cpp \
 	HotColdSplitting.cpp \
-	IPConstantPropagation.cpp \
 	IPO.cpp \
+	IROutliner.cpp \
 	InferFunctionAttrs.cpp \
 	InlineSimple.cpp \
 	Inliner.cpp \
@@ -38,7 +39,9 @@ SRCS+=	AlwaysInliner.cpp \
 	PartialInlining.cpp \
 	PassManagerBuilder.cpp \
 	PruneEH.cpp \
+	SampleContextTracker.cpp \
 	SampleProfile.cpp \
+	SampleProfileProbe.cpp \
 	ipoSCCP.cpp \
 	StripDeadPrototypes.cpp \
 	StripSymbols.cpp \

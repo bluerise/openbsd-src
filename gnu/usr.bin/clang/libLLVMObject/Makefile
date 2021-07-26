@@ -29,6 +29,7 @@ SRCS+=	Archive.cpp \
 	SymbolSize.cpp \
 	TapiFile.cpp \
 	TapiUniversal.cpp \
+	MachOUniversalWriter.cpp \
 	WasmObjectFile.cpp \
 	WindowsMachineFlag.cpp \
 	WindowsResource.cpp \

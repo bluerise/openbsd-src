@@ -19,11 +19,13 @@ SRCS+=	AMDGPUAliasAnalysis.cpp \
 	AMDGPUFixFunctionBitcasts.cpp \
 	AMDGPUFrameLowering.cpp \
 	AMDGPUHSAMetadataStreamer.cpp \
+	AMDGPUInstCombineIntrinsic.cpp \
 	AMDGPUInstrInfo.cpp \
 	AMDGPUInstructionSelector.cpp \
 	AMDGPUISelDAGToDAG.cpp \
 	AMDGPUISelLowering.cpp \
 	AMDGPUGlobalISelUtils.cpp \
+	AMDGPULateCodeGenPrepare.cpp \
 	AMDGPULegalizerInfo.cpp \
 	AMDGPULibCalls.cpp \
 	AMDGPULibFunc.cpp \
@@ -35,6 +37,7 @@ SRCS+=	AMDGPUAliasAnalysis.cpp \
 	AMDGPUMachineModuleInfo.cpp \
 	AMDGPUMacroFusion.cpp \
 	AMDGPUMCInstLower.cpp \
+	AMDGPUMIRFormatter.cpp \
 	AMDGPUOpenCLEnqueuedBlockLowering.cpp \
 	AMDGPUPostLegalizerCombiner.cpp \
 	AMDGPUPreLegalizerCombiner.cpp \
@@ -49,7 +52,6 @@ SRCS+=	AMDGPUAliasAnalysis.cpp \
 	AMDGPUTargetTransformInfo.cpp \
 	AMDGPUUnifyDivergentExitNodes.cpp \
 	AMDGPUUnifyMetadata.cpp \
-	AMDGPUInline.cpp \
 	AMDGPUPerfHintAnalysis.cpp \
 	AMDILCFGStructurizer.cpp \
 	AMDGPUPrintfRuntimeBinding.cpp \
@@ -75,7 +77,6 @@ SRCS+=	AMDGPUAliasAnalysis.cpp \
 	SIAddIMGInit.cpp \
 	SIAnnotateControlFlow.cpp \
 	SIFixSGPRCopies.cpp \
-	SIFixupVectorISel.cpp \
 	SIFixVGPRCopies.cpp \
 	SIPreAllocateWWMRegs.cpp \
 	SIFoldOperands.cpp \
@@ -98,6 +99,7 @@ SRCS+=	AMDGPUAliasAnalysis.cpp \
 	SIPeepholeSDWA.cpp \
 	SIPostRABundler.cpp \
 	SIPreEmitPeephole.cpp \
+	SIProgramInfo.cpp \
 	SIRegisterInfo.cpp \
 	SIRemoveShortExecBranches.cpp \
 	SIShrinkInstructions.cpp \

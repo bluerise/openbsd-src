@@ -34,7 +34,7 @@ BACKEND_DESC+=		LLVM${arch}Desc
 BACKEND_DISASSEMBLER+=	LLVM${arch}Disassembler
 BACKEND_INFO+=		LLVM${arch}Info
 .if "${arch}" == "X86" || "${arch}" == "AArch64" || "${arch}" == "ARM" \
- || "${arch}" == "AMDGPU" || "${arch}" == "RISCV"
+ || "${arch}" == "AMDGPU"
 BACKEND_UTILS+=		LLVM${arch}Utils
 .endif
 .endif

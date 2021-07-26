@@ -66,7 +66,8 @@ SRCS+=	AIX.cpp \
 	WebAssembly.cpp \
 	XCore.cpp \
 	PPCLinux.cpp \
-	InterfaceStubs.cpp
+	InterfaceStubs.cpp \
+	ZOS.cpp
 
 # Driver/Toolchains/Arch
 SRCS+=	AArch64.cpp \

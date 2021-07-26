@@ -8,10 +8,11 @@ CPPFLAGS+=	-I${LLVM_SRCS}/include/llvm/Transforms/Scalar
 
 SRCS+=	ADCE.cpp \
 	AlignmentFromAssumptions.cpp \
+	AnnotationRemarks.cpp \
 	BDCE.cpp \
 	CallSiteSplitting.cpp \
 	ConstantHoisting.cpp \
-	ConstantProp.cpp \
+	ConstraintElimination.cpp \
 	CorrelatedValuePropagation.cpp \
 	DCE.cpp \
 	DeadStoreElimination.cpp \
@@ -39,6 +40,7 @@ SRCS+=	ADCE.cpp \
 	LoopIdiomRecognize.cpp \
 	LoopInstSimplify.cpp \
 	LoopInterchange.cpp \
+	LoopFlatten.cpp \
 	LoopLoadElimination.cpp \
 	LoopPassManager.cpp \
 	LoopPredication.cpp \
@@ -71,6 +73,7 @@ SRCS+=	ADCE.cpp \
 	SROA.cpp \
 	Scalar.cpp \
 	Scalarizer.cpp \
+	ScalarizeMaskedMemIntrin.cpp \
 	SeparateConstOffsetFromGEP.cpp \
 	SimpleLoopUnswitch.cpp \
 	SimplifyCFGPass.cpp \

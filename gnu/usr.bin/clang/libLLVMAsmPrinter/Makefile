@@ -5,6 +5,7 @@ NOPROFILE=
 
 SRCS+=	AccelTable.cpp \
 	AddressPool.cpp \
+	AIXException.cpp \
 	ARMException.cpp \
 	AsmPrinter.cpp \
 	AsmPrinterDwarf.cpp \
@@ -24,6 +25,7 @@ SRCS+=	AccelTable.cpp \
 	EHStreamer.cpp \
 	ErlangGCPrinter.cpp \
 	OcamlGCPrinter.cpp \
+	PseudoProbePrinter.cpp \
 	WinCFGuard.cpp \
 	WinException.cpp \
 	CodeViewDebug.cpp \

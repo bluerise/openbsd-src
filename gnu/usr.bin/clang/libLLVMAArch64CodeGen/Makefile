@@ -12,6 +12,8 @@ SRCS+=	AArch64CallLowering.cpp \
 	AArch64LegalizerInfo.cpp \
 	AArch64PreLegalizerCombiner.cpp \
 	AArch64PostLegalizerCombiner.cpp \
+	AArch64PostLegalizerLowering.cpp \
+	AArch64PostSelectOptimize.cpp \
 	AArch64RegisterBankInfo.cpp
 
 SRCS+=	AArch64A57FPLoadBalancing.cpp \

@@ -31,6 +31,8 @@ HDRS+=	R600GenAsmWriter.inc \
 	R600GenRegisterInfo.inc \
 	R600GenSubtargetInfo.inc
 
+HDRS+=	InstCombineTables.inc
+
 all: ${HDRS}
 
 install:
@@ -138,6 +140,11 @@ R600GenRegisterInfo.inc: ${LLVM_SRCS}/lib/Target/AMDGPU/R600.td
 		-o ${.TARGET} ${.ALLSRC}
 R600GenSubtargetInfo.inc: ${LLVM_SRCS}/lib/Target/AMDGPU/R600.td
 	${.OBJDIR}/../../../llvm-tblgen/llvm-tblgen -gen-subtarget \
+		-I${LLVM_SRCS}/include -I${LLVM_SRCS}/lib/Target/AMDGPU \
+		-o ${.TARGET} ${.ALLSRC}
+
+InstCombineTables.inc: ${LLVM_SRCS}/lib/Target/AMDGPU/InstCombineTables.td
+	${.OBJDIR}/../../../llvm-tblgen/llvm-tblgen -gen-searchable-tables \
 		-I${LLVM_SRCS}/include -I${LLVM_SRCS}/lib/Target/AMDGPU \
 		-o ${.TARGET} ${.ALLSRC}
 

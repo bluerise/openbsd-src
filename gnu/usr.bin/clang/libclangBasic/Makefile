@@ -18,22 +18,25 @@ SRCS=	Attributes.cpp \
 	DiagnosticIDs.cpp \
 	DiagnosticOptions.cpp \
 	ExpressionTraits.cpp \
+	FileEntry.cpp \
 	FileManager.cpp \
 	FileSystemStatCache.cpp \
-	FixedPoint.cpp \
 	IdentifierTable.cpp \
 	LangOptions.cpp \
 	LangStandards.cpp \
 	Module.cpp \
 	ObjCRuntime.cpp \
+	OpenCLOptions.cpp \
 	OpenMPKinds.cpp \
 	OperatorPrecedence.cpp \
+	ProfileList.cpp \
 	SanitizerBlacklist.cpp \
 	SanitizerSpecialCaseList.cpp \
 	Sanitizers.cpp \
 	SourceLocation.cpp \
 	SourceManager.cpp \
 	Stack.cpp \
+	TargetID.cpp \
 	TargetInfo.cpp \
 	Targets.cpp \
 	TokenKinds.cpp \
@@ -71,6 +74,11 @@ SRCS+=	AArch64.cpp \
 
 .PATH:	${.CURDIR}/../../../llvm/clang/lib/Basic
 .PATH:	${.CURDIR}/../../../llvm/clang/lib/Basic/Targets
+
+BUILDFIRST=	VCSVersion.inc
+
+VCSVersion.inc:
+	touch $@
 
 install:
 	@# Nothing here so far ...

@@ -541,14 +541,9 @@ private:
 
     auto Iter = AdditionalUsers.find(I);
     if (Iter != AdditionalUsers.end()) {
-      // Copy additional users before notifying them of changes, because new
-      // users may be added, potentially invalidating the iterator.
-      SmallVector<Instruction *, 2> ToNotify;
       for (User *U : Iter->second)
         if (auto *UI = dyn_cast<Instruction>(U))
-          ToNotify.push_back(UI);
-      for (Instruction *UI : ToNotify)
-        OperandChangedState(UI);
+          OperandChangedState(UI);
     }
   }
   void handleCallOverdefined(CallBase &CB);

@@ -45,9 +45,6 @@ class X86MachineFunctionInfo : public MachineFunctionInfo {
   /// stack frame in bytes.
   unsigned CalleeSavedFrameSize = 0;
 
-  // SaveArgSize - Number of register arguments saved on the stack
-  unsigned SaveArgSize = 0;
-
   /// BytesToPopOnReturn - Number of bytes function pops on return (in addition
   /// to the space used by the return address).
   /// Used on windows platform for stdcall & fastcall name decoration
@@ -141,9 +138,6 @@ public:
 
   unsigned getCalleeSavedFrameSize() const { return CalleeSavedFrameSize; }
   void setCalleeSavedFrameSize(unsigned bytes) { CalleeSavedFrameSize = bytes; }
-
-  unsigned getSaveArgSize() const { return SaveArgSize; }
-  void setSaveArgSize(unsigned bytes) { SaveArgSize = bytes; }
 
   unsigned getBytesToPopOnReturn() const { return BytesToPopOnReturn; }
   void setBytesToPopOnReturn (unsigned bytes) { BytesToPopOnReturn = bytes;}

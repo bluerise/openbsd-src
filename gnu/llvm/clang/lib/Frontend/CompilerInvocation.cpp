@@ -1178,6 +1178,8 @@ bool CompilerInvocation::ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args,
     Opts.LinkBitcodeFiles.push_back(F);
   }
 
+  Opts.ReturnProtector = Args.hasArg(OPT_ret_protector);
+
   if (Args.getLastArg(OPT_femulated_tls) ||
       Args.getLastArg(OPT_fno_emulated_tls)) {
     Opts.ExplicitEmulatedTLS = true;

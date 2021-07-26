@@ -2941,6 +2941,26 @@ CINDEX_LINKAGE void
 clang_disposeCXPlatformAvailability(CXPlatformAvailability *availability);
 
 /**
+ * If cursor refers to a variable declaration and it has initializer returns
+ * cursor referring to the initializer otherwise return null cursor.
+ */
+CINDEX_LINKAGE CXCursor clang_Cursor_getVarDeclInitializer(CXCursor cursor);
+
+/**
+ * If cursor refers to a variable declaration that has global storage returns 1.
+ * If cursor refers to a variable declaration that doesn't have global storage
+ * returns 0. Otherwise returns -1.
+ */
+CINDEX_LINKAGE int clang_Cursor_hasVarDeclGlobalStorage(CXCursor cursor);
+
+/**
+ * If cursor refers to a variable declaration that has external storage
+ * returns 1. If cursor refers to a variable declaration that doesn't have
+ * external storage returns 0. Otherwise returns -1.
+ */
+CINDEX_LINKAGE int clang_Cursor_hasVarDeclExternalStorage(CXCursor cursor);
+
+/**
  * Describe the "language" of the entity referred to by a cursor.
  */
 enum CXLanguageKind {
@@ -3841,7 +3861,15 @@ enum CXTypeNullabilityKind {
   /**
    * Nullability is not applicable to this type.
    */
-  CXTypeNullability_Invalid = 3
+  CXTypeNullability_Invalid = 3,
+
+  /**
+   * Generally behaves like Nullable, except when used in a block parameter that
+   * was imported into a swift async method. There, swift will assume that the
+   * parameter can get null even if no error occured. _Nullable parameters are
+   * assumed to only get null on error.
+   */
+  CXTypeNullability_NullableResult = 4
 };
 
 /**

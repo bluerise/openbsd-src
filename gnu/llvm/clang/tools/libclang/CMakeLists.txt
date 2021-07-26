@@ -20,6 +20,7 @@ set(SOURCES
   CXType.cpp
   Indexing.cpp
   FatalErrorHandler.cpp
+  Rewrite.cpp
 
   ADDITIONAL_HEADERS
   CIndexDiagnostic.h
@@ -41,6 +42,7 @@ set(LIBS
   clangFrontend
   clangIndex
   clangLex
+  clangRewrite
   clangSema
   clangSerialization
   clangTooling
@@ -95,11 +97,11 @@ if(NOT LLVM_ENABLE_PIC OR LIBCLANG_BUILD_STATIC)
   set(ENABLE_STATIC STATIC)
 endif()
 
-if (WIN32 AND ENABLE_SHARED AND ENABLE_STATIC)
+if (MSVC AND ENABLE_SHARED AND ENABLE_STATIC)
   unset(ENABLE_STATIC)
 endif()
 
-if(WIN32)
+if(MSVC)
   set(output_name "libclang")
 else()
   set(output_name "clang")
@@ -150,7 +152,6 @@ if(ENABLE_SHARED)
   else()
     set_target_properties(libclang
       PROPERTIES
-      SOVERSION ${LIBCLANG_LIBRARY_VERSION}
       VERSION ${LIBCLANG_LIBRARY_VERSION}
       DEFINE_SYMBOL _CINDEX_LIB_)
     # FIXME: _CINDEX_LIB_ affects dllexport/dllimport on Win32.
@@ -173,7 +174,6 @@ install(DIRECTORY ../../include/clang-c
   DESTINATION "${LIBCLANG_HEADERS_INSTALL_DESTINATION}"
   FILES_MATCHING
   PATTERN "*.h"
-  PATTERN ".svn" EXCLUDE
   )
 
 # LLVM_DISTRIBUTION_COMPONENTS requires that each component have both a

@@ -176,6 +176,8 @@ iic*		at imxiic?
 bdpmic*		at iic?
 imxesdhc*	at fdt?
 sdmmc*		at imxesdhc?
+imxmipidphy*	at fdt?
+imxnwldsi*	at fdt?
 imxpciephy*	at fdt?
 imxpwm*		at fdt?
 imxspi*		at fdt?
@@ -183,6 +185,7 @@ ssdfb*		at iic?
 ssdfb*		at spi?
 wsdisplay*	at ssdfb?
 imxtmu*		at fdt?
+tisnmeb*	at i2c?
 
 # Raspberry Pi 3/4
 bcmaux*		at fdt? early 1

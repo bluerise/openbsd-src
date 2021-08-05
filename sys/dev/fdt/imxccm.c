@@ -144,6 +144,8 @@
 #define  CCM_INT_PLL_POST_DIV_MASK			0x7
 
 /* Frac PLL */
+#define CCM_FRAC_IMX8M_VIDEO_PLL1_0		0x10
+#define CCM_FRAC_IMX8M_VIDEO_PLL1_1		0x14
 #define CCM_FRAC_IMX8M_ARM_PLL0			0x28
 #define CCM_FRAC_IMX8M_ARM_PLL1			0x2c
 #define  CCM_FRAC_PLL_LOCK				(1U << 31)
@@ -166,6 +168,8 @@
 #define  CCM_FRAC_PLL_INT_DIV_CTL_MASK			0x7f
 #define  CCM_FRAC_PLL_DENOM				(1 << 24)
 #define CCM_FRAC_IMX8M_PLLOUT_DIV_CFG		0x78
+#define  CCM_FRAC_IMX8M_PLLOUT_DIV_CFG_VIDEO_PLL1_SHIFT	8
+#define  CCM_FRAC_IMX8M_PLLOUT_DIV_CFG_VIDEO_PLL1_MASK	0x7
 #define  CCM_FRAC_IMX8M_PLLOUT_DIV_CFG_ARM_SHIFT	20
 #define  CCM_FRAC_IMX8M_PLLOUT_DIV_CFG_ARM_MASK		0x7
 
@@ -259,6 +263,7 @@ uint32_t imxccm_imx8mq_pwm(struct imxccm_softc *sc, uint32_t);
 uint32_t imxccm_imx8mq_uart(struct imxccm_softc *sc, uint32_t);
 uint32_t imxccm_imx8mq_usdhc(struct imxccm_softc *sc, uint32_t);
 uint32_t imxccm_imx8mq_usb(struct imxccm_softc *sc, uint32_t);
+uint32_t imxccm_imx8mq_dsi(struct imxccm_softc *sc, uint32_t);
 int imxccm_imx8m_set_div(struct imxccm_softc *, uint32_t, uint64_t, uint64_t);
 void imxccm_enable(void *, uint32_t *, int);
 uint32_t imxccm_get_frequency(void *, uint32_t *);
@@ -1151,13 +1156,51 @@ imxccm_imx8mq_usb(struct imxccm_softc *sc, uint32_t idx)
 }
 
 uint32_t
+imxccm_imx8mq_dsi(struct imxccm_softc *sc, uint32_t idx)
+{
+	uint32_t mux, parent;
+
+	if (idx >= sc->sc_nmuxs || sc->sc_muxs[idx].reg == 0)
+		return 0;
+
+	mux = HREAD4(sc, sc->sc_muxs[idx].reg);
+	mux >>= sc->sc_muxs[idx].shift;
+	mux &= sc->sc_muxs[idx].mask;
+
+	switch (mux) {
+	case 0:
+		return clock_get_frequency(sc->sc_node, "osc_25m");
+	case 1:
+		if (idx == IMX8MQ_CLK_DSI_CORE)
+			return 266 * 1000 * 1000; /* sys1_pll_266m */
+		printf("%s: 0x%08x 0x%08x\n", __func__, idx, mux);
+		return 0;
+	case 2:
+		if (idx == IMX8MQ_CLK_DSI_AHB)
+			return 80 * 1000 * 1000; /* sys1_pll_80m */
+		printf("%s: 0x%08x 0x%08x\n", __func__, idx, mux);
+		return 0;
+	case 7:
+		if (idx == IMX8MQ_CLK_DSI_PHY_REF) {
+			parent = IMX8MQ_VIDEO_PLL1; /* video_pll1_out */
+			return imxccm_get_frequency(sc, &parent);
+		}
+		printf("%s: 0x%08x 0x%08x\n", __func__, idx, mux);
+		return 0;
+	default:
+		printf("%s: 0x%08x 0x%08x\n", __func__, idx, mux);
+		return 0;
+	}
+}
+
+uint32_t
 imxccm_imx8mq_get_pll(struct imxccm_softc *sc, uint32_t idx)
 {
-	uint32_t divr_val, divq_val, divf_val;
+	uint64_t freq;
+	uint32_t divr_val, divq_val;//, divf_val;
 	uint32_t divff, divfi;
 	uint32_t pllout_div;
 	uint32_t pll0, pll1;
-	uint32_t freq;
 	uint32_t mux;
 
 	pllout_div = regmap_read_4(sc->sc_anatop, CCM_FRAC_IMX8M_PLLOUT_DIV_CFG);
@@ -1168,6 +1211,12 @@ imxccm_imx8mq_get_pll(struct imxccm_softc *sc, uint32_t idx)
 		pll1 = regmap_read_4(sc->sc_anatop, CCM_FRAC_IMX8M_ARM_PLL1);
 		pllout_div >>= CCM_FRAC_IMX8M_PLLOUT_DIV_CFG_ARM_SHIFT;
 		pllout_div &= CCM_FRAC_IMX8M_PLLOUT_DIV_CFG_ARM_MASK;
+		break;
+	case IMX8MQ_VIDEO_PLL1:
+		pll0 = regmap_read_4(sc->sc_anatop, CCM_FRAC_IMX8M_VIDEO_PLL1_0);
+		pll1 = regmap_read_4(sc->sc_anatop, CCM_FRAC_IMX8M_VIDEO_PLL1_1);
+		pllout_div >>= CCM_FRAC_IMX8M_PLLOUT_DIV_CFG_VIDEO_PLL1_SHIFT;
+		pllout_div &= CCM_FRAC_IMX8M_PLLOUT_DIV_CFG_VIDEO_PLL1_MASK;
 		break;
 	default:
 		printf("%s: 0x%08x\n", __func__, idx);
@@ -1204,9 +1253,11 @@ imxccm_imx8mq_get_pll(struct imxccm_softc *sc, uint32_t idx)
 	divff = (pll1 >> CCM_FRAC_PLL_FRAC_DIV_CTL_SHIFT) &
 	    CCM_FRAC_PLL_FRAC_DIV_CTL_MASK;
 	divfi = pll1 & CCM_FRAC_PLL_INT_DIV_CTL_MASK;
-	divf_val = 1 + divfi + divff / CCM_FRAC_PLL_DENOM;
 
-	freq = freq / (divr_val + 1) * 8 * divf_val / ((divq_val + 1) * 2);
+	freq *= 8;
+	freq /= (divr_val + 1);
+	freq = (freq * divff) / (1 << 24) + freq * (divfi + 1);
+	freq /= ((divq_val + 1) * 2);
 	return freq / (pllout_div + 1);
 }
 
@@ -1228,6 +1279,15 @@ imxccm_imx8mq_set_pll(struct imxccm_softc *sc, uint32_t idx, uint64_t freq)
 		pll1 = CCM_FRAC_IMX8M_ARM_PLL1;
 		pllout_div >>= CCM_FRAC_IMX8M_PLLOUT_DIV_CFG_ARM_SHIFT;
 		pllout_div &= CCM_FRAC_IMX8M_PLLOUT_DIV_CFG_ARM_MASK;
+		/* XXX: Assume fixed divider to ease math. */
+		KASSERT(pllout_div == 0);
+		divr = 5;
+		break;
+	case IMX8MQ_VIDEO_PLL1:
+		pll0 = CCM_FRAC_IMX8M_VIDEO_PLL1_0;
+		pll1 = CCM_FRAC_IMX8M_VIDEO_PLL1_1;
+		pllout_div >>= CCM_FRAC_IMX8M_PLLOUT_DIV_CFG_VIDEO_PLL1_SHIFT;
+		pllout_div &= CCM_FRAC_IMX8M_PLLOUT_DIV_CFG_VIDEO_PLL1_MASK;
 		/* XXX: Assume fixed divider to ease math. */
 		KASSERT(pllout_div == 0);
 		divr = 5;
@@ -1622,6 +1682,8 @@ imxccm_get_frequency(void *cookie, uint32_t *cells)
 			return imxccm_get_frequency(sc, &parent);
 		case IMX8MQ_ARM_PLL:
 			return imxccm_imx8mq_get_pll(sc, idx);
+		case IMX8MQ_VIDEO_PLL1:
+			return imxccm_imx8mq_get_pll(sc, idx);
 		}
 
 		/* These are composite clocks. */
@@ -1666,6 +1728,10 @@ imxccm_get_frequency(void *cookie, uint32_t *cells)
 			case IMX8MQ_CLK_PWM3:
 			case IMX8MQ_CLK_PWM4:
 				freq = imxccm_imx8mq_pwm(sc, idx);
+				break;
+			case IMX8MQ_CLK_DSI_CORE:
+			case IMX8MQ_CLK_DSI_AHB:
+				freq = imxccm_imx8mq_dsi(sc, idx);
 				break;
 			default:
 				printf("%s: 0x%08x\n", __func__, idx);
@@ -1792,6 +1858,8 @@ imxccm_set_frequency(void *cookie, uint32_t *cells, uint32_t freq)
 		}
 	} else if (sc->sc_divs == imx8mq_divs) {
 		switch (idx) {
+		case IMX8MQ_VIDEO_PLL1:
+			return imxccm_imx8mq_set_pll(sc, idx, freq);
 		case IMX8MQ_CLK_ARM:
 			parent = IMX8MQ_CLK_A53_SRC;
 			return imxccm_set_frequency(cookie, &parent, freq);
@@ -1816,6 +1884,22 @@ imxccm_set_frequency(void *cookie, uint32_t *cells, uint32_t freq)
 		case IMX8MQ_CLK_USDHC2:
 			parent_freq = imxccm_imx8mq_usdhc(sc, idx);
 			return imxccm_imx8m_set_div(sc, idx, freq, parent_freq);
+		case IMX8MQ_CLK_DSI_CORE:
+		case IMX8MQ_CLK_DSI_PHY_REF:
+		case IMX8MQ_CLK_DSI_AHB:
+			parent_freq = imxccm_imx8mq_dsi(sc, idx);
+			return imxccm_imx8m_set_div(sc, idx, freq, parent_freq);
+		case IMX8MQ_CLK_DSI_IPG_DIV:
+			parent = sc->sc_divs[idx].parent;
+			parent_freq = imxccm_get_frequency(sc, &parent);
+			div = 0;
+			while (parent_freq / (div + 1) > freq)
+				div++;
+			reg = HREAD4(sc, sc->sc_divs[idx].reg);
+			reg &= ~(sc->sc_divs[idx].mask << sc->sc_divs[idx].shift);
+			reg |= (div << sc->sc_divs[idx].shift);
+			HWRITE4(sc, sc->sc_divs[idx].reg, reg);
+			return 0;
 		}
 	} else if (sc->sc_divs == imx7d_divs) {
 		switch (idx) {
@@ -1970,6 +2054,22 @@ imxccm_set_parent(void *cookie, uint32_t *cells, uint32_t *pcells)
 		}
 	} else if (sc->sc_muxs == imx8mq_muxs) {
 		switch (idx) {
+		case IMX8MQ_VIDEO_PLL1_REF_SEL:
+			if (pidx != IMX8MQ_CLK_25M)
+				break;
+			mux = regmap_read_4(sc->sc_anatop, sc->sc_muxs[idx].reg);
+			mux &= ~(sc->sc_muxs[idx].mask << sc->sc_muxs[idx].shift);
+			mux |= (0x0 << sc->sc_muxs[idx].shift);
+			regmap_write_4(sc->sc_anatop, sc->sc_muxs[idx].reg, mux);
+			return 0;
+		case IMX8MQ_VIDEO_PLL1_BYPASS:
+			if (pidx != IMX8MQ_VIDEO_PLL1)
+				break;
+			mux = regmap_read_4(sc->sc_anatop, sc->sc_muxs[idx].reg);
+			mux &= ~(sc->sc_muxs[idx].mask << sc->sc_muxs[idx].shift);
+			mux |= (0x0 << sc->sc_muxs[idx].shift);
+			regmap_write_4(sc->sc_anatop, sc->sc_muxs[idx].reg, mux);
+			return 0;
 		case IMX8MQ_CLK_A53_SRC:
 			if (pidx != IMX8MQ_ARM_PLL_OUT &&
 			    pidx != IMX8MQ_SYS1_PLL_800M)
@@ -2015,6 +2115,30 @@ imxccm_set_parent(void *cookie, uint32_t *cells, uint32_t *pcells)
 			mux = HREAD4(sc, sc->sc_muxs[idx].reg);
 			mux &= ~(sc->sc_muxs[idx].mask << sc->sc_muxs[idx].shift);
 			mux |= (0x1 << sc->sc_muxs[idx].shift);
+			HWRITE4(sc, sc->sc_muxs[idx].reg, mux);
+			return 0;
+		case IMX8MQ_CLK_DSI_CORE:
+			if (pidx != IMX8MQ_SYS1_PLL_266M)
+				break;
+			mux = HREAD4(sc, sc->sc_muxs[idx].reg);
+			mux &= ~(sc->sc_muxs[idx].mask << sc->sc_muxs[idx].shift);
+			mux |= (0x1 << sc->sc_muxs[idx].shift);
+			HWRITE4(sc, sc->sc_muxs[idx].reg, mux);
+			return 0;
+		case IMX8MQ_CLK_DSI_PHY_REF:
+			if (pidx != IMX8MQ_VIDEO_PLL1_OUT)
+				break;
+			mux = HREAD4(sc, sc->sc_muxs[idx].reg);
+			mux &= ~(sc->sc_muxs[idx].mask << sc->sc_muxs[idx].shift);
+			mux |= (0x7 << sc->sc_muxs[idx].shift);
+			HWRITE4(sc, sc->sc_muxs[idx].reg, mux);
+			return 0;
+		case IMX8MQ_CLK_DSI_AHB:
+			if (pidx != IMX8MQ_SYS1_PLL_80M)
+				break;
+			mux = HREAD4(sc, sc->sc_muxs[idx].reg);
+			mux &= ~(sc->sc_muxs[idx].mask << sc->sc_muxs[idx].shift);
+			mux |= (0x2 << sc->sc_muxs[idx].shift);
 			HWRITE4(sc, sc->sc_muxs[idx].reg, mux);
 			return 0;
 		}

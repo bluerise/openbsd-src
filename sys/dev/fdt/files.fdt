@@ -513,6 +513,14 @@ device	imxiomuxc
 attach	imxiomuxc at fdt
 file	dev/fdt/imxiomuxc.c		imxiomuxc
 
+device	imxmipidphy
+attach	imxmipidphy at fdt
+file	dev/fdt/imxmipidphy.c		imxmipidphy
+
+device	imxnwldsi
+attach	imxnwldsi at fdt
+file	dev/fdt/imxnwldsi.c		imxnwldsi
+
 device	imxpciephy
 attach	imxpciephy at fdt
 file	dev/fdt/imxpciephy.c		imxpciephy
@@ -588,3 +596,8 @@ file	dev/fdt/cwfg.c			cwfg
 device	dapmic
 attach	dapmic at i2c
 file	dev/fdt/dapmic.c		dapmic
+
+# TI SN65DSI86 MIPI-DSI to eDP Bridge
+device	tisnmeb
+attach	tisnmeb at i2c
+file	dev/fdt/sn65dsi86.c		tisnmeb

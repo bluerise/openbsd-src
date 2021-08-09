@@ -74,10 +74,6 @@ imxnwldsi_attach(struct device *parent, struct device *self, void *aux)
 	pinctrl_byname(faa->fa_node, "default");
 	power_domain_enable(faa->fa_node);
 	clock_set_assigned(faa->fa_node);
-	clock_enable(faa->fa_node, "core");
-	clock_enable(faa->fa_node, "rx_esc");
-	clock_enable(faa->fa_node, "tx_esc");
-	clock_enable(faa->fa_node, "phy_ref");
-	clock_enable(faa->fa_node, "lcdif");
+	clock_enable_all(faa->fa_node);
 	delay(1000);
 }

@@ -486,6 +486,10 @@ device	imxccm
 attach	imxccm at fdt
 file	dev/fdt/imxccm.c		imxccm
 
+device	imxdcss
+attach	imxdcss at fdt
+file	dev/fdt/imxdcss.c		imxdcss
+
 device	imxdog
 attach	imxdog at fdt
 file	dev/fdt/imxdog.c		imxdog
@@ -516,6 +520,10 @@ file	dev/fdt/imxiic_fdt.c		imxiic_fdt
 device	imxiomuxc
 attach	imxiomuxc at fdt
 file	dev/fdt/imxiomuxc.c		imxiomuxc
+
+device	imxlcdif
+attach	imxlcdif at fdt
+file	dev/fdt/imxlcdif.c		imxlcdif
 
 device	imxmipidphy
 attach	imxmipidphy at fdt

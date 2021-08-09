@@ -264,6 +264,7 @@ uint32_t imxccm_imx8mq_uart(struct imxccm_softc *sc, uint32_t);
 uint32_t imxccm_imx8mq_usdhc(struct imxccm_softc *sc, uint32_t);
 uint32_t imxccm_imx8mq_usb(struct imxccm_softc *sc, uint32_t);
 uint32_t imxccm_imx8mq_dsi(struct imxccm_softc *sc, uint32_t);
+uint32_t imxccm_imx8mq_disp(struct imxccm_softc *sc, uint32_t);
 int imxccm_imx8m_set_div(struct imxccm_softc *, uint32_t, uint64_t, uint64_t);
 void imxccm_enable(void *, uint32_t *, int);
 uint32_t imxccm_get_frequency(void *, uint32_t *);
@@ -1194,6 +1195,37 @@ imxccm_imx8mq_dsi(struct imxccm_softc *sc, uint32_t idx)
 }
 
 uint32_t
+imxccm_imx8mq_disp(struct imxccm_softc *sc, uint32_t idx)
+{
+	uint32_t mux;
+
+	if (idx >= sc->sc_nmuxs || sc->sc_muxs[idx].reg == 0)
+		return 0;
+
+	mux = HREAD4(sc, sc->sc_muxs[idx].reg);
+	mux >>= sc->sc_muxs[idx].shift;
+	mux &= sc->sc_muxs[idx].mask;
+
+	switch (mux) {
+	case 0:
+		return clock_get_frequency(sc->sc_node, "osc_25m");
+	case 1:
+		if (idx == IMX8MQ_CLK_DISP_RTRM)
+			return 800 * 1000 * 1000; /* sys1_pll_800m */
+		printf("%s: 0x%08x 0x%08x\n", __func__, idx, mux);
+		return 0;
+	case 2:
+		if (idx == IMX8MQ_CLK_DISP_AXI)
+			return 800 * 1000 * 1000; /* sys1_pll_800m */
+		printf("%s: 0x%08x 0x%08x\n", __func__, idx, mux);
+		return 0;
+	default:
+		printf("%s: 0x%08x 0x%08x\n", __func__, idx, mux);
+		return 0;
+	}
+}
+
+uint32_t
 imxccm_imx8mq_get_pll(struct imxccm_softc *sc, uint32_t idx)
 {
 	uint64_t freq;
@@ -1858,6 +1890,10 @@ imxccm_set_frequency(void *cookie, uint32_t *cells, uint32_t freq)
 		}
 	} else if (sc->sc_divs == imx8mq_divs) {
 		switch (idx) {
+//		case IMX8MQ_VIDEO_PLL1_REF_SEL:
+//			if (imxccm_get_frequency(sc, cells) != freq)
+//				break;
+//			return 0;
 		case IMX8MQ_VIDEO_PLL1:
 			return imxccm_imx8mq_set_pll(sc, idx, freq);
 		case IMX8MQ_CLK_ARM:
@@ -1889,6 +1925,10 @@ imxccm_set_frequency(void *cookie, uint32_t *cells, uint32_t freq)
 		case IMX8MQ_CLK_DSI_AHB:
 			parent_freq = imxccm_imx8mq_dsi(sc, idx);
 			return imxccm_imx8m_set_div(sc, idx, freq, parent_freq);
+		case IMX8MQ_CLK_DISP_AXI:
+		case IMX8MQ_CLK_DISP_RTRM:
+			parent_freq = imxccm_imx8mq_disp(sc, idx);
+			return imxccm_imx8m_set_div(sc, idx, freq, parent_freq);
 		case IMX8MQ_CLK_DSI_IPG_DIV:
 			parent = sc->sc_divs[idx].parent;
 			parent_freq = imxccm_get_frequency(sc, &parent);
@@ -1900,6 +1940,10 @@ imxccm_set_frequency(void *cookie, uint32_t *cells, uint32_t freq)
 			reg |= (div << sc->sc_divs[idx].shift);
 			HWRITE4(sc, sc->sc_divs[idx].reg, reg);
 			return 0;
+//		case IMX8MQ_VIDEO2_PLL1_REF_SEL:
+//			if (imxccm_get_frequency(sc, cells) != freq)
+//				break;
+//			return 0;
 		}
 	} else if (sc->sc_divs == imx7d_divs) {
 		switch (idx) {
@@ -2082,6 +2126,22 @@ imxccm_set_parent(void *cookie, uint32_t *cells, uint32_t *pcells)
 				mux |= (0x4 << sc->sc_muxs[idx].shift);
 			HWRITE4(sc, sc->sc_muxs[idx].reg, mux);
 			return 0;
+		case IMX8MQ_CLK_DISP_AXI:
+			if (pidx != IMX8MQ_SYS1_PLL_800M)
+				break;
+			mux = HREAD4(sc, sc->sc_muxs[idx].reg);
+			mux &= ~(sc->sc_muxs[idx].mask << sc->sc_muxs[idx].shift);
+			mux |= (0x2 << sc->sc_muxs[idx].shift);
+			HWRITE4(sc, sc->sc_muxs[idx].reg, mux);
+			return 0;
+		case IMX8MQ_CLK_DISP_RTRM:
+			if (pidx != IMX8MQ_SYS1_PLL_800M)
+				break;
+			mux = HREAD4(sc, sc->sc_muxs[idx].reg);
+			mux &= ~(sc->sc_muxs[idx].mask << sc->sc_muxs[idx].shift);
+			mux |= (0x1 << sc->sc_muxs[idx].shift);
+			HWRITE4(sc, sc->sc_muxs[idx].reg, mux);
+			return 0;
 		case IMX8MQ_CLK_USB_BUS:
 			if (pidx != IMX8MQ_SYS2_PLL_500M)
 				break;
@@ -2117,6 +2177,15 @@ imxccm_set_parent(void *cookie, uint32_t *cells, uint32_t *pcells)
 			mux |= (0x1 << sc->sc_muxs[idx].shift);
 			HWRITE4(sc, sc->sc_muxs[idx].reg, mux);
 			return 0;
+		case IMX8MQ_CLK_DC_PIXEL:
+		case IMX8MQ_CLK_LCDIF_PIXEL:
+			if (pidx != IMX8MQ_VIDEO_PLL1_OUT)
+				break;
+			mux = HREAD4(sc, sc->sc_muxs[idx].reg);
+			mux &= ~(sc->sc_muxs[idx].mask << sc->sc_muxs[idx].shift);
+			mux |= (0x1 << sc->sc_muxs[idx].shift);
+			HWRITE4(sc, sc->sc_muxs[idx].reg, mux);
+			return 0;
 		case IMX8MQ_CLK_DSI_CORE:
 			if (pidx != IMX8MQ_SYS1_PLL_266M)
 				break;
@@ -2140,6 +2209,14 @@ imxccm_set_parent(void *cookie, uint32_t *cells, uint32_t *pcells)
 			mux &= ~(sc->sc_muxs[idx].mask << sc->sc_muxs[idx].shift);
 			mux |= (0x2 << sc->sc_muxs[idx].shift);
 			HWRITE4(sc, sc->sc_muxs[idx].reg, mux);
+			return 0;
+		case IMX8MQ_VIDEO2_PLL1_REF_SEL:
+			if (pidx != IMX8MQ_CLK_27M)
+				break;
+			mux = regmap_read_4(sc->sc_anatop, sc->sc_muxs[idx].reg);
+			mux &= ~(sc->sc_muxs[idx].mask << sc->sc_muxs[idx].shift);
+			mux |= (0x1 << sc->sc_muxs[idx].shift);
+			regmap_write_4(sc->sc_anatop, sc->sc_muxs[idx].reg, mux);
 			return 0;
 		}
 	}

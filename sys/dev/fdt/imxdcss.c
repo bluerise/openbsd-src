@@ -30,36 +30,36 @@
 #include <dev/ofw/ofw_power.h>
 #include <dev/ofw/fdt.h>
 
-struct imxmipidphy_softc {
+struct imxdcss_softc {
 	struct device		sc_dev;
 	bus_space_tag_t		sc_iot;
 	bus_space_handle_t	sc_ioh;
 };
 
-int	imxmipidphy_match(struct device *, void *, void *);
-void	imxmipidphy_attach(struct device *, struct device *, void *);
+int	imxdcss_match(struct device *, void *, void *);
+void	imxdcss_attach(struct device *, struct device *, void *);
 
-struct cfattach	imxmipidphy_ca = {
-	sizeof (struct imxmipidphy_softc), imxmipidphy_match, imxmipidphy_attach
+struct cfattach	imxdcss_ca = {
+	sizeof (struct imxdcss_softc), imxdcss_match, imxdcss_attach
 };
 
-struct cfdriver imxmipidphy_cd = {
-	NULL, "imxmipidphy", DV_DULL
+struct cfdriver imxdcss_cd = {
+	NULL, "imxdcss", DV_DULL
 };
 
 int
-imxmipidphy_match(struct device *parent, void *match, void *aux)
+imxdcss_match(struct device *parent, void *match, void *aux)
 {
 	struct fdt_attach_args *faa = aux;
 
-	return OF_is_compatible(faa->fa_node, "fsl,imx8mq-mipi-dphy");
+	return OF_is_compatible(faa->fa_node, "nxp,imx8mq-dcss");
 }
 
 void
-imxmipidphy_attach(struct device *parent, struct device *self, void *aux)
+imxdcss_attach(struct device *parent, struct device *self, void *aux)
 {
 	struct fdt_attach_args *faa = aux;
-	struct imxmipidphy_softc *sc = (struct imxmipidphy_softc *) self;
+	struct imxdcss_softc *sc = (struct imxdcss_softc *) self;
 
 	if (faa->fa_nreg < 1)
 		return;

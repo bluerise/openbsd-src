@@ -688,6 +688,7 @@ struct imxccm_mux imx8mp_muxs[] = {
 
 #define IMX8MQ_CLK_32K			0x01
 #define IMX8MQ_CLK_25M			0x02
+#define IMX8MQ_CLK_27M			0x03
 #define IMX8MQ_ARM_PLL			0x0a
 #define IMX8MQ_ARM_PLL_OUT		0x0c
 #define IMX8MQ_VIDEO_PLL1_REF_SEL	0x21
@@ -708,11 +709,16 @@ struct imxccm_mux imx8mp_muxs[] = {
 #define IMX8MQ_CLK_A53_DIV		0x5a
 #define IMX8MQ_CLK_ENET_AXI		0x68
 #define IMX8MQ_CLK_NAND_USDHC_BUS	0x69
+#define IMX8MQ_CLK_DISP_AXI		0x6b
+#define IMX8MQ_CLK_DISP_APB		0x6c
+#define IMX8MQ_CLK_DISP_RTRM		0x6d
 #define IMX8MQ_CLK_USB_BUS		0x6e
 #define IMX8MQ_CLK_AHB			0x74
+#define IMX8MQ_CLK_DISP_DTRC		0x7a
 #define IMX8MQ_CLK_PCIE1_CTRL		0x7c
 #define IMX8MQ_CLK_PCIE1_PHY		0x7d
 #define IMX8MQ_CLK_PCIE1_AUX		0x7e
+#define IMX8MQ_CLK_DC_PIXEL		0x7f
 #define IMX8MQ_CLK_LCDIF_PIXEL		0x80
 #define IMX8MQ_CLK_ENET_REF		0x89
 #define IMX8MQ_CLK_ENET_TIMER		0x8a
@@ -769,18 +775,28 @@ struct imxccm_mux imx8mp_muxs[] = {
 #define IMX8MQ_CLK_TMU_ROOT		0xf6
 #define IMX8MQ_CLK_DSI_AHB		0xf4
 #define IMX8MQ_CLK_DSI_IPG_DIV		0xf5
+#define IMX8MQ_CLK_DISP_AXI_ROOT	0xf7
+#define IMX8MQ_CLK_DISP_APB_ROOT	0xf8
+#define IMX8MQ_CLK_DISP_RTRM_ROOT	0xf9
 #define IMX8MQ_CLK_OCOTP_ROOT		0xfa
+#define IMX8MQ_VIDEO2_PLL_OUT		0xfe
 #define IMX8MQ_CLK_ARM			0x102
+#define IMX8MQ_VIDEO2_PLL1_REF_SEL	0x10a
 
 struct imxccm_gate imx8mq_gates[] = {
 	[IMX8MQ_CLK_A53_CG] = { 0x8000, 14 },
 	[IMX8MQ_CLK_ENET_AXI] = { 0x8880, 14 },
 	[IMX8MQ_CLK_NAND_USDHC_BUS] = { 0x8900, 14 },
+	[IMX8MQ_CLK_DISP_AXI] = { 0x8a00, 14 },
+	[IMX8MQ_CLK_DISP_APB] = { 0x8a80, 14 },
+	[IMX8MQ_CLK_DISP_RTRM] = { 0x8b00, 14 },
 	[IMX8MQ_CLK_USB_BUS] = { 0x8b80, 14 },
 	[IMX8MQ_CLK_AHB] = { 0x9000, 14 },
+	[IMX8MQ_CLK_DISP_DTRC] = { 0xa200, 14 },
 	[IMX8MQ_CLK_PCIE1_CTRL] = { 0xa300, 14 },
 	[IMX8MQ_CLK_PCIE1_PHY] = { 0xa380, 14 },
 	[IMX8MQ_CLK_PCIE1_AUX] = { 0xa400, 14 },
+	[IMX8MQ_CLK_DC_PIXEL] = { 0xa480, 14 },
 	[IMX8MQ_CLK_LCDIF_PIXEL] = { 0xa500, 14 },
 	[IMX8MQ_CLK_ENET_REF] = { 0xa980, 14 },
 	[IMX8MQ_CLK_ENET_TIMER] = { 0xaa00, 14 },
@@ -835,6 +851,9 @@ struct imxccm_gate imx8mq_gates[] = {
 	[IMX8MQ_CLK_USDHC2_ROOT] = { 0x4520, 0, IMX8MQ_CLK_USDHC2 },
 	[IMX8MQ_CLK_TMU_ROOT] = { 0x4620, 0 },
 	[IMX8MQ_CLK_DSI_AHB] = { 0x9200, 14 },
+	[IMX8MQ_CLK_DISP_AXI_ROOT] = { 0x45d0, 0, IMX8MQ_CLK_DISP_AXI },
+	[IMX8MQ_CLK_DISP_APB_ROOT] = { 0x45d0, 0, IMX8MQ_CLK_DISP_APB },
+	[IMX8MQ_CLK_DISP_RTRM_ROOT] = { 0x45d0, 0, IMX8MQ_CLK_DISP_RTRM },
 	[IMX8MQ_CLK_OCOTP_ROOT] = { 0x4220, 0, IMX8MQ_CLK_IPG_ROOT },
 };
 
@@ -842,11 +861,16 @@ struct imxccm_divider imx8mq_divs[] = {
 	[IMX8MQ_CLK_A53_DIV] = { 0x8000, 0, 0x7, IMX8MQ_CLK_A53_CG },
 	[IMX8MQ_CLK_ENET_AXI] = { 0x8880, 0, 0x3f },
 	[IMX8MQ_CLK_NAND_USDHC_BUS] = { 0x8900, 0, 0x3f },
+	[IMX8MQ_CLK_DISP_AXI] = { 0x8a00, 0, 0x3f },
+	[IMX8MQ_CLK_DISP_APB] = { 0x8a80, 0, 0x3f },
+	[IMX8MQ_CLK_DISP_RTRM] = { 0x8b00, 0, 0x3f },
 	[IMX8MQ_CLK_USB_BUS] = { 0x8b80, 0, 0x3f },
 	[IMX8MQ_CLK_AHB] = { 0x9000, 0, 0x3f },
+	[IMX8MQ_CLK_DISP_DTRC] = { 0xa200, 0, 0x3f },
 	[IMX8MQ_CLK_PCIE1_CTRL] = { 0xa300, 0, 0x3f },
 	[IMX8MQ_CLK_PCIE1_PHY] = { 0xa380, 0, 0x3f },
 	[IMX8MQ_CLK_PCIE1_AUX] = { 0xa400, 0, 0x3f },
+	[IMX8MQ_CLK_DC_PIXEL] = { 0xa480, 0, 0x3f },
 	[IMX8MQ_CLK_LCDIF_PIXEL] = { 0xa500, 0, 0x3f },
 	[IMX8MQ_CLK_ENET_REF] = { 0xa980, 0, 0x3f },
 	[IMX8MQ_CLK_ENET_TIMER] = { 0xaa00, 0, 0x3f },
@@ -883,11 +907,16 @@ struct imxccm_divider imx8mq_divs[] = {
 struct imxccm_divider imx8mq_predivs[] = {
 	[IMX8MQ_CLK_ENET_AXI] = { 0x8880, 16, 0x7 },
 	[IMX8MQ_CLK_NAND_USDHC_BUS] = { 0x8900, 16, 0x7 },
+	[IMX8MQ_CLK_DISP_AXI] = { 0x8a00, 16, 0x7 },
+	[IMX8MQ_CLK_DISP_APB] = { 0x8a80, 16, 0x7 },
+	[IMX8MQ_CLK_DISP_RTRM] = { 0x8b00, 16, 0x7 },
 	[IMX8MQ_CLK_USB_BUS] = { 0x8b80, 16, 0x7 },
 	[IMX8MQ_CLK_AHB] = { 0x9000, 16, 0x7 },
+	[IMX8MQ_CLK_DISP_DTRC] = { 0xa200, 16, 0x7 },
 	[IMX8MQ_CLK_PCIE1_CTRL] = { 0xa300, 16, 0x7 },
 	[IMX8MQ_CLK_PCIE1_PHY] = { 0xa380, 16, 0x7 },
 	[IMX8MQ_CLK_PCIE1_AUX] = { 0xa400, 16, 0x7 },
+	[IMX8MQ_CLK_DC_PIXEL] = { 0xa480, 16, 0x7 },
 	[IMX8MQ_CLK_LCDIF_PIXEL] = { 0xa500, 16, 0x7 },
 	[IMX8MQ_CLK_ENET_REF] = { 0xa980, 16, 0x7 },
 	[IMX8MQ_CLK_ENET_TIMER] = { 0xaa00, 16, 0x7 },
@@ -925,11 +954,16 @@ struct imxccm_mux imx8mq_muxs[] = {
 	[IMX8MQ_CLK_A53_SRC] = { 0x8000, 24, 0x7 },
 	[IMX8MQ_CLK_ENET_AXI] = { 0x8880, 24, 0x7 },
 	[IMX8MQ_CLK_NAND_USDHC_BUS] = { 0x8900, 24, 0x7 },
+	[IMX8MQ_CLK_DISP_AXI] = { 0x8a00, 24, 0x7 },
+	[IMX8MQ_CLK_DISP_APB] = { 0x8a80, 24, 0x7 },
+	[IMX8MQ_CLK_DISP_RTRM] = { 0x8b00, 24, 0x7 },
 	[IMX8MQ_CLK_USB_BUS] = { 0x8b80, 24, 0x7 },
 	[IMX8MQ_CLK_AHB] = { 0x9000, 24, 0x7 },
+	[IMX8MQ_CLK_DISP_DTRC] = { 0xa200, 24, 0x7 },
 	[IMX8MQ_CLK_PCIE1_CTRL] = { 0xa300, 24, 0x7 },
 	[IMX8MQ_CLK_PCIE1_PHY] = { 0xa380, 24, 0x7 },
 	[IMX8MQ_CLK_PCIE1_AUX] = { 0xa400, 24, 0x7 },
+	[IMX8MQ_CLK_DC_PIXEL] = { 0xa480, 24, 0x7 },
 	[IMX8MQ_CLK_LCDIF_PIXEL] = { 0xa500, 24, 0x7 },
 	[IMX8MQ_CLK_ENET_REF] = { 0xa980, 24, 0x7 },
 	[IMX8MQ_CLK_ENET_TIMER] = { 0xaa00, 24, 0x7 },
@@ -959,4 +993,5 @@ struct imxccm_mux imx8mq_muxs[] = {
 	[IMX8MQ_CLK_PCIE2_AUX] = { 0xc100, 24, 0x7 },
 	[IMX8MQ_CLK_ECSPI3] = { 0xc180, 24, 0x7 },
 	[IMX8MQ_CLK_DSI_AHB] = { 0x9200, 24, 0x7 },
+	[IMX8MQ_VIDEO2_PLL1_REF_SEL] = { 0x54, 0, 0x3 },
 };

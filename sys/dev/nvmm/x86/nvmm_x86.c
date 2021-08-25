@@ -29,17 +29,17 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: nvmm_x86.c,v 1.21 2020/09/08 16:58:38 maxv Exp $");
+//__KERNEL_RCSID(0, "$NetBSD: nvmm_x86.c,v 1.21 2020/09/08 16:58:38 maxv Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/kernel.h>
-#include <sys/cpu.h>
+//#include <sys/cpu.h>
 
 #include <uvm/uvm_extern.h>
 
-#include <x86/cputypes.h>
-#include <x86/specialreg.h>
+//#include <x86/cputypes.h>
+#include <machine/specialreg.h>
 
 #include <dev/nvmm/nvmm.h>
 #include <dev/nvmm/nvmm_internal.h>
@@ -218,10 +218,10 @@ const struct nvmm_x64_state nvmm_x86_reset_state = {
 	},
 
 	.fpu = {
-		.fx_cw = 0x0040,
-		.fx_sw = 0x0000,
-		.fx_tw = 0x55,
-		.fx_zero = 0x55,
+		.fx_fcw = 0x0040,
+		.fx_fsw = 0x0000,
+		.fx_ftw = 0x55,
+		.fx_unused1 = 0x55,
 		.fx_mxcsr = 0x1F80,
 	}
 };
@@ -230,37 +230,37 @@ const struct nvmm_x86_cpuid_mask nvmm_cpuid_00000001 = {
 	.eax = ~0,
 	.ebx = ~0,
 	.ecx =
-	    CPUID2_SSE3 |
-	    CPUID2_PCLMULQDQ |
-	    /* CPUID2_DTES64 excluded */
-	    /* CPUID2_MONITOR excluded */
-	    /* CPUID2_DS_CPL excluded */
-	    /* CPUID2_VMX excluded */
-	    /* CPUID2_SMX excluded */
-	    /* CPUID2_EST excluded */
-	    /* CPUID2_TM2 excluded */
-	    CPUID2_SSSE3 |
-	    /* CPUID2_CNXTID excluded */
-	    /* CPUID2_SDBG excluded */
-	    CPUID2_FMA |
-	    CPUID2_CX16 |
-	    /* CPUID2_XTPR excluded */
-	    /* CPUID2_PDCM excluded */
-	    /* CPUID2_PCID excluded, but re-included in VMX */
-	    /* CPUID2_DCA excluded */
-	    CPUID2_SSE41 |
-	    CPUID2_SSE42 |
-	    /* CPUID2_X2APIC excluded */
-	    CPUID2_MOVBE |
-	    CPUID2_POPCNT |
-	    /* CPUID2_DEADLINE excluded */
-	    CPUID2_AESNI |
-	    CPUID2_XSAVE |
-	    CPUID2_OSXSAVE |
-	    /* CPUID2_AVX excluded */
-	    CPUID2_F16C |
-	    CPUID2_RDRAND,
-	    /* CPUID2_RAZ excluded */
+	    CPUIDECX_SSE3 |
+	    CPUIDECX_PCLMUL |
+	    /* CPUIDECX_DTES64 excluded */
+	    /* CPUIDECX_MONITOR excluded */
+	    /* CPUIDECX_DS_CPL excluded */
+	    /* CPUIDECX_VMX excluded */
+	    /* CPUIDECX_SMX excluded */
+	    /* CPUIDECX_EST excluded */
+	    /* CPUIDECX_TM2 excluded */
+	    CPUIDECX_SSSE3 |
+	    /* CPUIDECX_CNXTID excluded */
+	    /* CPUIDECX_SDBG excluded */
+	    CPUIDECX_FMA3 |
+	    CPUIDECX_CX16 |
+	    /* CPUIDECX_XTPR excluded */
+	    /* CPUIDECX_PDCM excluded */
+	    /* CPUIDECX_PCID excluded, but re-included in VMX */
+	    /* CPUIDECX_DCA excluded */
+	    CPUIDECX_SSE41 |
+	    CPUIDECX_SSE42 |
+	    /* CPUIDECX_X2APIC excluded */
+	    CPUIDECX_MOVBE |
+	    CPUIDECX_POPCNT |
+	    /* CPUIDECX_DEADLINE excluded */
+	    CPUIDECX_AES |
+	    CPUIDECX_XSAVE |
+	    CPUIDECX_OSXSAVE |
+	    /* CPUIDECX_AVX excluded */
+	    CPUIDECX_F16C |
+	    CPUIDECX_RDRAND,
+	    /* CPUIDECX_RAZ excluded */
 	.edx =
 	    CPUID_FPU |
 	    CPUID_VME |
@@ -280,7 +280,7 @@ const struct nvmm_x86_cpuid_mask nvmm_cpuid_00000001 = {
 	    CPUID_PAT |
 	    CPUID_PSE36 |
 	    /* CPUID_PSN excluded */
-	    CPUID_CLFSH |
+	    CPUID_CFLUSH |
 	    /* CPUID_DS excluded */
 	    /* CPUID_ACPI excluded */
 	    CPUID_MMX |
@@ -296,110 +296,110 @@ const struct nvmm_x86_cpuid_mask nvmm_cpuid_00000001 = {
 const struct nvmm_x86_cpuid_mask nvmm_cpuid_00000007 = {
 	.eax = ~0,
 	.ebx =
-	    CPUID_SEF_FSGSBASE |
-	    /* CPUID_SEF_TSC_ADJUST excluded */
-	    /* CPUID_SEF_SGX excluded */
-	    CPUID_SEF_BMI1 |
-	    /* CPUID_SEF_HLE excluded */
-	    /* CPUID_SEF_AVX2 excluded */
-	    CPUID_SEF_FDPEXONLY |
-	    CPUID_SEF_SMEP |
-	    CPUID_SEF_BMI2 |
-	    CPUID_SEF_ERMS |
-	    /* CPUID_SEF_INVPCID excluded, but re-included in VMX */
-	    /* CPUID_SEF_RTM excluded */
-	    /* CPUID_SEF_QM excluded */
-	    CPUID_SEF_FPUCSDS |
-	    /* CPUID_SEF_MPX excluded */
-	    CPUID_SEF_PQE |
-	    /* CPUID_SEF_AVX512F excluded */
-	    /* CPUID_SEF_AVX512DQ excluded */
-	    CPUID_SEF_RDSEED |
-	    CPUID_SEF_ADX |
-	    CPUID_SEF_SMAP |
-	    /* CPUID_SEF_AVX512_IFMA excluded */
-	    CPUID_SEF_CLFLUSHOPT |
-	    CPUID_SEF_CLWB,
-	    /* CPUID_SEF_PT excluded */
-	    /* CPUID_SEF_AVX512PF excluded */
-	    /* CPUID_SEF_AVX512ER excluded */
-	    /* CPUID_SEF_AVX512CD excluded */
-	    /* CPUID_SEF_SHA excluded */
-	    /* CPUID_SEF_AVX512BW excluded */
-	    /* CPUID_SEF_AVX512VL excluded */
+	    SEFF0EBX_FSGSBASE |
+	    /* SEFF0EBX_TSC_ADJUST excluded */
+	    /* SEFF0EBX_SGX excluded */
+	    SEFF0EBX_BMI1 |
+	    /* SEFF0EBX_HLE excluded */
+	    /* SEFF0EBX_AVX2 excluded */
+	    SEFF0EBX_FDPEXONLY |
+	    SEFF0EBX_SMEP |
+	    SEFF0EBX_BMI2 |
+	    SEFF0EBX_ERMS |
+	    /* SEFF0EBX_INVPCID excluded, but re-included in VMX */
+	    /* SEFF0EBX_RTM excluded */
+	    /* SEFF0EBX_QM excluded */
+	    SEFF0EBX_FPUCSDS |
+	    /* SEFF0EBX_MPX excluded */
+	    SEFF0EBX_PQE |
+	    /* SEFF0EBX_AVX512F excluded */
+	    /* SEFF0EBX_AVX512DQ excluded */
+	    SEFF0EBX_RDSEED |
+	    SEFF0EBX_ADX |
+	    SEFF0EBX_SMAP |
+	    /* SEFF0EBX_AVX512_IFMA excluded */
+	    SEFF0EBX_CLFLUSHOPT |
+	    SEFF0EBX_CLWB,
+	    /* SEFF0EBX_PT excluded */
+	    /* SEFF0EBX_AVX512PF excluded */
+	    /* SEFF0EBX_AVX512ER excluded */
+	    /* SEFF0EBX_AVX512CD excluded */
+	    /* SEFF0EBX_SHA excluded */
+	    /* SEFF0EBX_AVX512BW excluded */
+	    /* SEFF0EBX_AVX512VL excluded */
 	.ecx =
-	    CPUID_SEF_PREFETCHWT1 |
-	    /* CPUID_SEF_AVX512_VBMI excluded */
-	    CPUID_SEF_UMIP |
-	    /* CPUID_SEF_PKU excluded */
-	    /* CPUID_SEF_OSPKE excluded */
-	    /* CPUID_SEF_WAITPKG excluded */
-	    /* CPUID_SEF_AVX512_VBMI2 excluded */
-	    /* CPUID_SEF_CET_SS excluded */
-	    CPUID_SEF_GFNI |
-	    CPUID_SEF_VAES |
-	    CPUID_SEF_VPCLMULQDQ |
-	    /* CPUID_SEF_AVX512_VNNI excluded */
-	    /* CPUID_SEF_AVX512_BITALG excluded */
-	    /* CPUID_SEF_AVX512_VPOPCNTDQ excluded */
-	    /* CPUID_SEF_MAWAU excluded */
-	    /* CPUID_SEF_RDPID excluded */
-	    CPUID_SEF_CLDEMOTE |
-	    CPUID_SEF_MOVDIRI |
-	    CPUID_SEF_MOVDIR64B,
-	    /* CPUID_SEF_SGXLC excluded */
-	    /* CPUID_SEF_PKS excluded */
+	    SEFF0ECX_PREFETCHWT1 |
+	    /* SEFF0ECX_AVX512_VBMI excluded */
+	    SEFF0ECX_UMIP |
+	    /* SEFF0ECX_PKU excluded */
+	    /* SEFF0ECX_OSPKE excluded */
+	    /* SEFF0ECX_WAITPKG excluded */
+	    /* SEFF0ECX_AVX512_VBMI2 excluded */
+	    /* SEFF0ECX_CET_SS excluded */
+	    SEFF0ECX_GFNI |
+	    SEFF0ECX_VAES |
+	    SEFF0ECX_VPCLMULQDQ |
+	    /* SEFF0ECX_AVX512_VNNI excluded */
+	    /* SEFF0ECX_AVX512_BITALG excluded */
+	    /* SEFF0ECX_AVX512_VPOPCNTDQ excluded */
+	    /* SEFF0ECX_MAWAU excluded */
+	    /* SEFF0ECX_RDPID excluded */
+	    SEFF0ECX_CLDEMOTE |
+	    SEFF0ECX_MOVDIRI |
+	    SEFF0ECX_MOVDIR64B,
+	    /* SEFF0ECX_SGXLC excluded */
+	    /* SEFF0ECX_PKS excluded */
 	.edx =
-	    /* CPUID_SEF_AVX512_4VNNIW excluded */
-	    /* CPUID_SEF_AVX512_4FMAPS excluded */
-	    CPUID_SEF_FSREP_MOV |
-	    /* CPUID_SEF_AVX512_VP2INTERSECT excluded */
-	    /* CPUID_SEF_SRBDS_CTRL excluded */
-	    CPUID_SEF_MD_CLEAR |
-	    /* CPUID_SEF_TSX_FORCE_ABORT excluded */
-	    CPUID_SEF_SERIALIZE |
-	    /* CPUID_SEF_HYBRID excluded */
-	    /* CPUID_SEF_TSXLDTRK excluded */
-	    /* CPUID_SEF_CET_IBT excluded */
-	    /* CPUID_SEF_IBRS excluded */
-	    /* CPUID_SEF_STIBP excluded */
-	    /* CPUID_SEF_L1D_FLUSH excluded */
-	    CPUID_SEF_ARCH_CAP
-	    /* CPUID_SEF_CORE_CAP excluded */
-	    /* CPUID_SEF_SSBD excluded */
+	    /* SEFF0EDX_AVX512_4VNNIW excluded */
+	    /* SEFF0EDX_AVX512_4FMAPS excluded */
+	    SEFF0EDX_FSREP_MOV |
+	    /* SEFF0EDX_AVX512_VP2INTERSECT excluded */
+	    /* SEFF0EDX_SRBDS_CTRL excluded */
+	    SEFF0EDX_MD_CLEAR |
+	    /* SEFF0EDX_TSX_FORCE_ABORT excluded */
+	    SEFF0EDX_SERIALIZE |
+	    /* SEFF0EDX_HYBRID excluded */
+	    /* SEFF0EDX_TSXLDTRK excluded */
+	    /* SEFF0EDX_CET_IBT excluded */
+	    /* SEFF0EDX_IBRS excluded */
+	    /* SEFF0EDX_STIBP excluded */
+	    /* SEFF0EDX_L1D_FLUSH excluded */
+	    SEFF0EDX_ARCH_CAP
+	    /* SEFF0EDX_CORE_CAP excluded */
+	    /* SEFF0EDX_SSBD excluded */
 };
 
 const struct nvmm_x86_cpuid_mask nvmm_cpuid_80000001 = {
 	.eax = ~0,
 	.ebx = ~0,
 	.ecx =
-	    CPUID_LAHF |
-	    CPUID_CMPLEGACY |
-	    /* CPUID_SVM excluded */
-	    /* CPUID_EAPIC excluded */
-	    CPUID_ALTMOVCR0 |
-	    CPUID_ABM |
-	    CPUID_SSE4A |
-	    CPUID_MISALIGNSSE |
-	    CPUID_3DNOWPF |
-	    /* CPUID_OSVW excluded */
-	    /* CPUID_IBS excluded */
-	    CPUID_XOP |
-	    /* CPUID_SKINIT excluded */
-	    /* CPUID_WDT excluded */
-	    /* CPUID_LWP excluded */
-	    CPUID_FMA4 |
-	    CPUID_TCE |
-	    /* CPUID_NODEID excluded */
-	    CPUID_TBM |
-	    CPUID_TOPOEXT,
-	    /* CPUID_PCEC excluded */
-	    /* CPUID_PCENB excluded */
-	    /* CPUID_SPM excluded */
-	    /* CPUID_DBE excluded */
-	    /* CPUID_PTSC excluded */
-	    /* CPUID_L2IPERFC excluded */
-	    /* CPUID_MWAITX excluded */
+	    CPUIDECX_LAHF |
+	    CPUIDECX_CMPLEG |
+	    /* CPUIDECX_SVM excluded */
+	    /* CPUIDECX_EAPIC excluded */
+	    CPUIDECX_AMCR8 |
+	    CPUIDECX_ABM |
+	    CPUIDECX_SSE4A |
+	    CPUIDECX_MASSE |
+	    CPUIDECX_3DNOWP |
+	    /* CPUIDECX_OSVW excluded */
+	    /* CPUIDECX_IBS excluded */
+	    CPUIDECX_XOP |
+	    /* CPUIDECX_SKINIT excluded */
+	    /* CPUIDECX_WDT excluded */
+	    /* CPUIDECX_LWP excluded */
+	    CPUIDECX_FMA4 |
+	    CPUIDECX_TCE |
+	    /* CPUIDECX_NODEID excluded */
+	    CPUIDECX_TBM |
+	    CPUIDECX_TOPEXT,
+	    /* CPUIDECX_PCEC excluded */
+	    /* CPUIDECX_PCENB excluded */
+	    /* CPUIDECX_SPM excluded */
+	    /* CPUIDECX_DBE excluded */
+	    /* CPUIDECX_PTSC excluded */
+	    /* CPUIDECX_L2IPERFC excluded */
+	    /* CPUIDECX_MWAITX excluded */
 	.edx =
 	    CPUID_SYSCALL |
 	    CPUID_MPC |
@@ -419,18 +419,18 @@ const struct nvmm_x86_cpuid_mask nvmm_cpuid_80000007 = {
 	.eax = 0,
 	.ebx = 0,
 	.ecx = 0,
-	.edx = CPUID_APM_ITSC
+	.edx = CPUIDEDX_ITSC,
 };
 
 const struct nvmm_x86_cpuid_mask nvmm_cpuid_80000008 = {
 	.eax = ~0,
 	.ebx =
-	    CPUID_CAPEX_CLZERO |
-	    /* CPUID_CAPEX_IRPERF excluded */
-	    CPUID_CAPEX_XSAVEERPTR |
-	    /* CPUID_CAPEX_RDPRU excluded */
-	    /* CPUID_CAPEX_MCOMMIT excluded */
-	    CPUID_CAPEX_WBNOINVD,
+	    CPUIDEBX_CLZERO |
+	    /* CPUIDEBX_IRPERF excluded */
+	    CPUIDEBX_XSAVEERPTR |
+	    /* CPUIDEBX_RDPRU excluded */
+	    /* CPUIDEBX_MCOMMIT excluded */
+	    CPUIDEBX_WBNOINVD,
 	.ecx = ~0, /* TODO? */
 	.edx = 0
 };
@@ -442,7 +442,7 @@ nvmm_x86_pat_validate(uint64_t val)
 	size_t i;
 
 	for (i = 0; i < 8; i++) {
-		if (__predict_false(pat[i] & ~__BITS(2,0)))
+		if (__predict_false(pat[i] & ~0x7))
 			return false;
 		if (__predict_false(pat[i] == 2 || pat[i] == 3))
 			return false;

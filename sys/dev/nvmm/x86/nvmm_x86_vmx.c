@@ -29,30 +29,57 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: nvmm_x86_vmx.c,v 1.82 2021/03/26 15:59:53 reinoud Exp $");
+//__KERNEL_RCSID(0, "$NetBSD: nvmm_x86_vmx.c,v 1.82 2021/03/26 15:59:53 reinoud Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/kernel.h>
-#include <sys/kmem.h>
-#include <sys/cpu.h>
-#include <sys/xcall.h>
+#include <sys/malloc.h>
+//#include <sys/cpu.h>
+//#include <sys/xcall.h>
 #include <sys/mman.h>
-#include <sys/bitops.h>
+#include <sys/proc.h>
+//#include <sys/bitops.h>
 
 #include <uvm/uvm_extern.h>
 #include <uvm/uvm_page.h>
 
-#include <x86/cputypes.h>
-#include <x86/specialreg.h>
-#include <x86/dbregs.h>
-#include <x86/cpu_counter.h>
+//#include <x86/cputypes.h>
+#include <machine/specialreg.h>
+#include <machine/fpu.h>
+//#include <x86/dbregs.h>
+//#include <x86/cpu_counter.h>
 
 #include <machine/cpuvar.h>
 
 #include <dev/nvmm/nvmm.h>
 #include <dev/nvmm/nvmm_internal.h>
 #include <dev/nvmm/x86/nvmm_x86.h>
+
+#if 1
+#define __read_mostly
+#define __cacheline_aligned
+
+/* __BIT(n): nth bit, where __BIT(0) == 0x1. */
+#define __BIT(__n)	\
+    (((uintmax_t)(__n) >= NBBY * sizeof(uintmax_t)) ? 0 : \
+    ((uintmax_t)1 << (uintmax_t)((__n) & (NBBY * sizeof(uintmax_t) - 1))))
+
+/* Macros for min/max. */
+#define __MIN(a,b)	((/*CONSTCOND*/(a)<=(b))?(a):(b))
+#define __MAX(a,b)	((/*CONSTCOND*/(a)>(b))?(a):(b))
+
+/* __BITS(m, n): bits m through n, m < n. */
+#define __BITS(__m, __n)	\
+	((__BIT(__MAX((__m), (__n)) + 1) - 1) ^ (__BIT(__MIN((__m), (__n))) - 1))
+
+/* find least significant bit that is set */
+#define __LOWEST_SET_BIT(__mask) ((((__mask) - 1) & (__mask)) ^ (__mask))
+
+#define __SHIFTOUT(__x, __mask) (((__x) & (__mask)) / __LOWEST_SET_BIT(__mask))
+#define __SHIFTIN(__x, __mask) ((__x) * __LOWEST_SET_BIT(__mask))
+#define __SHIFTOUT_MASK(__mask) __SHIFTOUT((__mask), (__mask))
+#endif
 
 int _vmx_vmxon(paddr_t *pa);
 int _vmx_vmxoff(void);
@@ -715,7 +742,7 @@ extern bool pmap_ept_has_ad;
 
 static uint8_t *vmx_asidmap __read_mostly;
 static uint32_t vmx_maxasid __read_mostly;
-static kmutex_t vmx_asidlock __cacheline_aligned;
+static struct mutex vmx_asidlock __cacheline_aligned;
 
 #define VMX_XCR0_MASK_DEFAULT	(XCR0_X87|XCR0_SSE)
 static uint64_t vmx_xcr0_mask __read_mostly;
@@ -784,7 +811,7 @@ struct vmx_cpudata {
 	bool gtlb_want_flush;
 	bool gtsc_want_update;
 	uint64_t vcpu_htlb_gen;
-	kcpuset_t *htlb_want_flush;
+	struct cpuset *htlb_want_flush;
 
 	/* VMCS */
 	struct vmcs *vmcs;
@@ -820,7 +847,7 @@ struct vmx_cpudata {
 	uint64_t gprs[NVMM_X64_NGPR];
 	uint64_t drs[NVMM_X64_NDR];
 	uint64_t gtsc;
-	struct xsave_header gfpu __aligned(64);
+	struct savefpu gfpu __aligned(64);
 
 	/* VCPU configuration. */
 	bool cpuidpresent[VMX_NCPUIDS];
@@ -920,18 +947,17 @@ static void
 vmx_vmclear_remote(struct cpu_info *ci, paddr_t vmcs_pa)
 {
 	uint64_t xc;
-	int bound;
 
-	KASSERT(kpreempt_disabled());
+	/*KASSERT(kpreempt_disabled());*/
 
-	bound = curlwp_bind();
-	kpreempt_enable();
+	sched_peg_curproc(curcpu());
+	/*kpreempt_enable();*/
 
 	xc = xc_unicast(XC_HIGHPRI, vmx_vmclear_ipi, (void *)vmcs_pa, NULL, ci);
 	xc_wait(xc);
 
-	kpreempt_disable();
-	curlwp_bindx(bound);
+	/*kpreempt_disable();*/
+	atomic_clearbits_int(&curproc->p_flag, P_CPUPEG);
 }
 
 static void
@@ -942,7 +968,7 @@ vmx_vmcs_enter(struct nvmm_cpu *vcpu)
 
 	cpudata->vmcs_refcnt++;
 	if (cpudata->vmcs_refcnt > 1) {
-		KASSERT(kpreempt_disabled());
+		/*KASSERT(kpreempt_disabled());*/
 		KASSERT(vmx_vmptrst() == cpudata->vmcs_pa);
 		return;
 	}
@@ -950,7 +976,7 @@ vmx_vmcs_enter(struct nvmm_cpu *vcpu)
 	vmcs_ci = cpudata->vmcs_ci;
 	cpudata->vmcs_ci = (void *)0x00FFFFFFFFFFFFFF; /* clobber */
 
-	kpreempt_disable();
+	/*kpreempt_disable();*/
 
 	if (vmcs_ci == NULL) {
 		/* This VMCS is loaded for the first time. */
@@ -972,7 +998,7 @@ vmx_vmcs_leave(struct nvmm_cpu *vcpu)
 {
 	struct vmx_cpudata *cpudata = vcpu->cpudata;
 
-	KASSERT(kpreempt_disabled());
+	/*KASSERT(kpreempt_disabled());*/
 	KASSERT(vmx_vmptrst() == cpudata->vmcs_pa);
 	KASSERT(cpudata->vmcs_refcnt > 0);
 	cpudata->vmcs_refcnt--;
@@ -982,7 +1008,7 @@ vmx_vmcs_leave(struct nvmm_cpu *vcpu)
 	}
 
 	cpudata->vmcs_ci = curcpu();
-	kpreempt_enable();
+	/*kpreempt_enable();*/
 }
 
 static void
@@ -990,13 +1016,13 @@ vmx_vmcs_destroy(struct nvmm_cpu *vcpu)
 {
 	struct vmx_cpudata *cpudata = vcpu->cpudata;
 
-	KASSERT(kpreempt_disabled());
+	/*KASSERT(kpreempt_disabled());*/
 	KASSERT(vmx_vmptrst() == cpudata->vmcs_pa);
 	KASSERT(cpudata->vmcs_refcnt == 1);
 	cpudata->vmcs_refcnt--;
 
 	vmx_vmclear(&cpudata->vmcs_pa);
-	kpreempt_enable();
+	/*kpreempt_enable();*/
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1134,7 +1160,7 @@ static void
 vmx_inject_ud(struct nvmm_cpu *vcpu)
 {
 	struct nvmm_comm_page *comm = vcpu->comm;
-	int ret __diagused;
+	int ret;
 
 	comm->event.type = NVMM_VCPU_EVENT_EXCP;
 	comm->event.vector = 6;
@@ -1148,7 +1174,7 @@ static void
 vmx_inject_gp(struct nvmm_cpu *vcpu)
 {
 	struct nvmm_comm_page *comm = vcpu->comm;
-	int ret __diagused;
+	int ret;
 
 	comm->event.type = NVMM_VCPU_EVENT_EXCP;
 	comm->event.vector = 13;
@@ -2120,14 +2146,14 @@ vmx_htlb_catchup(struct nvmm_cpu *vcpu, int hcpu)
 	struct vmx_cpudata *cpudata = vcpu->cpudata;
 	struct ept_desc ept_desc;
 
-	if (__predict_true(!kcpuset_isset(cpudata->htlb_want_flush, hcpu))) {
+	if (__predict_true(!cpuset_isset(cpudata->htlb_want_flush, hcpu))) {
 		return;
 	}
 
 	ept_desc.eptp = vmx_vmread(VMCS_EPTP);
 	ept_desc.mbz = 0;
 	vmx_invept(vmx_ept_flush_op, &ept_desc);
-	kcpuset_clear(cpudata->htlb_want_flush, hcpu);
+	cpuset_clear(cpudata->htlb_want_flush, hcpu);
 }
 
 static inline uint64_t
@@ -2141,7 +2167,7 @@ vmx_htlb_flush(struct vmx_machdata *machdata, struct vmx_cpudata *cpudata)
 		return machgen;
 	}
 
-	kcpuset_copy(cpudata->htlb_want_flush, kcpuset_running);
+	cpuset_copy(cpudata->htlb_want_flush, cpuset_running);
 
 	ept_desc.eptp = vmx_vmread(VMCS_EPTP);
 	ept_desc.mbz = 0;
@@ -2154,7 +2180,7 @@ static inline void
 vmx_htlb_flush_ack(struct vmx_cpudata *cpudata, uint64_t machgen)
 {
 	cpudata->vcpu_htlb_gen = machgen;
-	kcpuset_clear(cpudata->htlb_want_flush, cpu_number());
+	cpuset_clear(cpudata->htlb_want_flush, cpu_number());
 }
 
 static inline void
@@ -3013,7 +3039,7 @@ vmx_vcpu_create(struct nvmm_machine *mach, struct nvmm_cpu *vcpu)
 	if (error)
 		goto error;
 
-	kcpuset_create(&cpudata->htlb_want_flush, true);
+//	kcpuset_create(&cpudata->htlb_want_flush, true);
 
 	/* Init the VCPU info. */
 	vmx_vcpu_init(mach, vcpu);
@@ -3046,7 +3072,7 @@ vmx_vcpu_destroy(struct nvmm_machine *mach, struct nvmm_cpu *vcpu)
 	vmx_asid_free(vcpu);
 	vmx_vmcs_destroy(vcpu);
 
-	kcpuset_destroy(cpudata->htlb_want_flush);
+//	kcpuset_destroy(cpudata->htlb_want_flush);
 
 	vmx_memfree(cpudata->vmcs_pa, (vaddr_t)cpudata->vmcs, VMCS_NPAGES);
 	vmx_memfree(cpudata->msrbm_pa, (vaddr_t)cpudata->msrbm, MSRBM_NPAGES);

@@ -260,6 +260,11 @@ include "dev/sdmmc/files.sdmmc"
 include "dev/onewire/files.onewire"
 
 #
+# NetBSD Virtual Machine Monitor.
+#
+include "dev/nvmm/files.nvmm"
+
+#
 # IPMI
 #
 attach	ipmi at mainbus

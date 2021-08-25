@@ -33,7 +33,7 @@
 
 #include <sys/types.h>
 
-#include <sys/lwp.h>
+//#include <sys/lwp.h>
 #include <sys/mutex.h>
 #include <sys/rwlock.h>
 #include <sys/sched.h>
@@ -56,7 +56,7 @@ struct nvmm_cpu {
 	/* Shared. */
 	bool present;
 	nvmm_cpuid_t cpuid;
-	kmutex_t lock;
+	struct mutex lock;
 
 	/* Comm page. */
 	struct nvmm_comm_page *comm;
@@ -80,7 +80,7 @@ struct nvmm_machine {
 	nvmm_machid_t machid;
 	time_t time;
 	struct nvmm_owner *owner;
-	krwlock_t lock;
+	struct rwlock lock;
 
 	/* Comm */
 	struct uvm_object *commuobj;
@@ -138,7 +138,7 @@ extern const struct nvmm_impl nvmm_x86_vmx;
 static inline bool
 nvmm_return_needed(struct nvmm_cpu *vcpu, struct nvmm_vcpu_exit *exit)
 {
-
+#if 0
 	if (preempt_needed()) {
 		exit->reason = NVMM_VCPU_EXIT_NONE;
 		return true;
@@ -147,6 +147,7 @@ nvmm_return_needed(struct nvmm_cpu *vcpu, struct nvmm_vcpu_exit *exit)
 		exit->reason = NVMM_VCPU_EXIT_NONE;
 		return true;
 	}
+#endif
 	if (vcpu->comm->stop) {
 		exit->reason = NVMM_VCPU_EXIT_STOPPED;
 		return true;

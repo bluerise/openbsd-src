@@ -29,7 +29,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: nvmm_x86_svm.c,v 1.83 2021/03/26 15:59:53 reinoud Exp $");
+//__KERNEL_RCSID(0, "$NetBSD: nvmm_x86_svm.c,v 1.83 2021/03/26 15:59:53 reinoud Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>

@@ -29,17 +29,16 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: nvmm.c,v 1.43 2021/04/12 09:22:58 mrg Exp $");
+//__KERNEL_RCSID(0, "$NetBSD: nvmm.c,v 1.43 2021/04/12 09:22:58 mrg Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/kernel.h>
 
 #include <sys/atomic.h>
-#include <sys/cpu.h>
+//#include <sys/cpu.h>
 #include <sys/conf.h>
-#include <sys/kmem.h>
-#include <sys/module.h>
+#include <sys/malloc.h>
 #include <sys/proc.h>
 #include <sys/mman.h>
 #include <sys/file.h>
@@ -49,8 +48,6 @@ __KERNEL_RCSID(0, "$NetBSD: nvmm.c,v 1.43 2021/04/12 09:22:58 mrg Exp $");
 #include <uvm/uvm_aobj.h>
 #include <uvm/uvm_extern.h>
 #include <uvm/uvm_page.h>
-
-#include "ioconf.h"
 
 #include <dev/nvmm/nvmm.h>
 #include <dev/nvmm/nvmm_internal.h>
@@ -81,7 +78,7 @@ nvmm_machine_alloc(struct nvmm_machine **ret)
 	for (i = 0; i < NVMM_MAX_MACHINES; i++) {
 		mach = &machines[i];
 
-		rw_enter(&mach->lock, RW_WRITER);
+		rw_enter(&mach->lock, RW_WRITE);
 		if (mach->present) {
 			rw_exit(&mach->lock);
 			continue;
@@ -90,7 +87,7 @@ nvmm_machine_alloc(struct nvmm_machine **ret)
 		mach->present = true;
 		mach->time = time_second;
 		*ret = mach;
-		atomic_inc_uint(&nmachines);
+		atomic_inc_int(&nmachines);
 		return 0;
 	}
 
@@ -103,7 +100,7 @@ nvmm_machine_free(struct nvmm_machine *mach)
 	KASSERT(rw_write_held(&mach->lock));
 	KASSERT(mach->present);
 	mach->present = false;
-	atomic_dec_uint(&nmachines);
+	atomic_dec_int(&nmachines);
 }
 
 static int
@@ -111,7 +108,7 @@ nvmm_machine_get(struct nvmm_owner *owner, nvmm_machid_t machid,
     struct nvmm_machine **ret, bool writer)
 {
 	struct nvmm_machine *mach;
-	krw_t op = writer ? RW_WRITER : RW_READER;
+	int op = writer ? RW_WRITE : RW_READ;
 
 	if (__predict_false(machid >= NVMM_MAX_MACHINES)) {
 		return EINVAL;
@@ -151,9 +148,9 @@ nvmm_vcpu_alloc(struct nvmm_machine *mach, nvmm_cpuid_t cpuid,
 	}
 	vcpu = &mach->cpus[cpuid];
 
-	mutex_enter(&vcpu->lock);
+	mtx_enter(&vcpu->lock);
 	if (vcpu->present) {
-		mutex_exit(&vcpu->lock);
+		mtx_leave(&vcpu->lock);
 		return EBUSY;
 	}
 
@@ -185,9 +182,9 @@ nvmm_vcpu_get(struct nvmm_machine *mach, nvmm_cpuid_t cpuid,
 	}
 	vcpu = &mach->cpus[cpuid];
 
-	mutex_enter(&vcpu->lock);
+	mtx_enter(&vcpu->lock);
 	if (__predict_false(!vcpu->present)) {
-		mutex_exit(&vcpu->lock);
+		mtx_leave(&vcpu->lock);
 		return ENOENT;
 	}
 	*ret = vcpu;
@@ -198,7 +195,7 @@ nvmm_vcpu_get(struct nvmm_machine *mach, nvmm_cpuid_t cpuid,
 static void
 nvmm_vcpu_put(struct nvmm_cpu *vcpu)
 {
-	mutex_exit(&vcpu->lock);
+	mtx_leave(&vcpu->lock);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -214,7 +211,7 @@ nvmm_kill_machines(struct nvmm_owner *owner)
 	for (i = 0; i < NVMM_MAX_MACHINES; i++) {
 		mach = &machines[i];
 
-		rw_enter(&mach->lock, RW_WRITER);
+		rw_enter(&mach->lock, RW_WRITE);
 		if (!mach->present || mach->owner != owner) {
 			rw_exit(&mach->lock);
 			continue;
@@ -228,7 +225,7 @@ nvmm_kill_machines(struct nvmm_owner *owner)
 			(*nvmm_impl->vcpu_destroy)(mach, vcpu);
 			nvmm_vcpu_free(mach, vcpu);
 			nvmm_vcpu_put(vcpu);
-			atomic_dec_uint(&mach->ncpus);
+			atomic_dec_int(&mach->ncpus);
 		}
 		(*nvmm_impl->machine_destroy)(mach);
 		uvmspace_free(mach->vm);
@@ -282,7 +279,8 @@ nvmm_machine_create(struct nvmm_owner *owner,
 	/* Create the machine vmspace. */
 	mach->gpa_begin = 0;
 	mach->gpa_end = NVMM_MAX_RAM;
-	mach->vm = uvmspace_alloc(0, mach->gpa_end - mach->gpa_begin, false);
+	mach->vm = uvmspace_alloc(0, mach->gpa_end - mach->gpa_begin,
+	    TRUE, FALSE);
 
 	/* Create the comm uobj. */
 	mach->commuobj = uao_create(NVMM_MAX_VCPUS * PAGE_SIZE, 0);
@@ -316,7 +314,7 @@ nvmm_machine_destroy(struct nvmm_owner *owner,
 		(*nvmm_impl->vcpu_destroy)(mach, vcpu);
 		nvmm_vcpu_free(mach, vcpu);
 		nvmm_vcpu_put(vcpu);
-		atomic_dec_uint(&mach->ncpus);
+		atomic_dec_int(&mach->ncpus);
 	}
 
 	(*nvmm_impl->machine_destroy)(mach);
@@ -353,11 +351,11 @@ nvmm_machine_configure(struct nvmm_owner *owner,
 	}
 
 	allocsz = nvmm_impl->mach_conf_sizes[op];
-	data = kmem_alloc(allocsz, KM_SLEEP);
+	data = malloc(allocsz, M_TEMP, M_WAITOK);
 
 	error = nvmm_machine_get(owner, args->machid, &mach, true);
 	if (error) {
-		kmem_free(data, allocsz);
+		free(data, M_TEMP, allocsz);
 		return error;
 	}
 
@@ -370,7 +368,7 @@ nvmm_machine_configure(struct nvmm_owner *owner,
 
 out:
 	nvmm_machine_put(mach);
-	kmem_free(data, allocsz);
+	free(data, M_TEMP, allocsz);
 	return error;
 }
 
@@ -392,8 +390,9 @@ nvmm_vcpu_create(struct nvmm_owner *owner, struct nvmm_ioc_vcpu_create *args)
 	/* Allocate the comm page. */
 	uao_reference(mach->commuobj);
 	error = uvm_map(kernel_map, (vaddr_t *)&vcpu->comm, PAGE_SIZE,
-	    mach->commuobj, args->cpuid * PAGE_SIZE, 0, UVM_MAPFLAG(UVM_PROT_RW,
-	    UVM_PROT_RW, UVM_INH_SHARE, UVM_ADV_RANDOM, 0));
+	    mach->commuobj, args->cpuid * PAGE_SIZE, 0,
+	    UVM_MAPFLAG(PROT_READ | PROT_WRITE, PROT_READ | PROT_WRITE,
+	    MAP_INHERIT_SHARE, MADV_RANDOM, 0));
 	if (error) {
 		uao_detach(mach->commuobj);
 		nvmm_vcpu_free(mach, vcpu);
@@ -417,7 +416,7 @@ nvmm_vcpu_create(struct nvmm_owner *owner, struct nvmm_ioc_vcpu_create *args)
 	}
 
 	nvmm_vcpu_put(vcpu);
-	atomic_inc_uint(&mach->ncpus);
+	atomic_inc_int(&mach->ncpus);
 
 out:
 	nvmm_machine_put(mach);
@@ -442,7 +441,7 @@ nvmm_vcpu_destroy(struct nvmm_owner *owner, struct nvmm_ioc_vcpu_destroy *args)
 	(*nvmm_impl->vcpu_destroy)(mach, vcpu);
 	nvmm_vcpu_free(mach, vcpu);
 	nvmm_vcpu_put(vcpu);
-	atomic_dec_uint(&mach->ncpus);
+	atomic_dec_int(&mach->ncpus);
 
 out:
 	nvmm_machine_put(mach);
@@ -465,18 +464,18 @@ nvmm_vcpu_configure(struct nvmm_owner *owner,
 		return EINVAL;
 
 	allocsz = nvmm_impl->vcpu_conf_sizes[op];
-	data = kmem_alloc(allocsz, KM_SLEEP);
+	data = malloc(allocsz, M_TEMP, M_WAITOK);
 
 	error = nvmm_machine_get(owner, args->machid, &mach, false);
 	if (error) {
-		kmem_free(data, allocsz);
+		free(data, M_TEMP, allocsz);
 		return error;
 	}
 
 	error = nvmm_vcpu_get(mach, args->cpuid, &vcpu);
 	if (error) {
 		nvmm_machine_put(mach);
-		kmem_free(data, allocsz);
+		free(data, M_TEMP, allocsz);
 		return error;
 	}
 
@@ -490,7 +489,7 @@ nvmm_vcpu_configure(struct nvmm_owner *owner,
 out:
 	nvmm_vcpu_put(vcpu);
 	nvmm_machine_put(mach);
-	kmem_free(data, allocsz);
+	free(data, M_TEMP, allocsz);
 	return error;
 }
 
@@ -591,7 +590,8 @@ nvmm_do_vcpu_run(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 		if (exit->u.mem.gpa >= mach->gpa_end) {
 			break;
 		}
-		if (uvm_fault(&vm->vm_map, exit->u.mem.gpa, exit->u.mem.prot)) {
+		if (uvm_fault(&vm->vm_map, exit->u.mem.gpa, VM_FAULT_WIRE,
+		    exit->u.mem.prot)) {
 			break;
 		}
 	}
@@ -766,8 +766,8 @@ nvmm_hva_map(struct nvmm_owner *owner, struct nvmm_ioc_hva_map *args)
 
 	/* Map the uobj into the user address space, as pageable. */
 	error = uvm_map(&vmspace->vm_map, &uva, hmapping->size, hmapping->uobj,
-	    0, 0, UVM_MAPFLAG(UVM_PROT_RW, UVM_PROT_RW, UVM_INH_SHARE,
-	    UVM_ADV_RANDOM, UVM_FLAG_FIXED|UVM_FLAG_UNMAP));
+	    0, 0, UVM_MAPFLAG(PROT_READ | PROT_WRITE, PROT_READ | PROT_WRITE,
+	    MAP_INHERIT_SHARE, MADV_RANDOM, UVM_FLAG_FIXED|UVM_FLAG_UNMAP));
 	if (error) {
 		uao_detach(hmapping->uobj);
 	}
@@ -801,6 +801,7 @@ nvmm_gpa_map(struct nvmm_owner *owner, struct nvmm_ioc_gpa_map *args)
 	struct nvmm_machine *mach;
 	struct uvm_object *uobj;
 	gpaddr_t gpa;
+	vaddr_t va;
 	size_t off;
 	int error;
 
@@ -846,13 +847,14 @@ nvmm_gpa_map(struct nvmm_owner *owner, struct nvmm_ioc_gpa_map *args)
 	uao_reference(uobj);
 
 	/* Map the uobj into the machine address space, as pageable. */
-	error = uvm_map(&mach->vm->vm_map, &gpa, args->size, uobj, off, 0,
-	    UVM_MAPFLAG(args->prot, UVM_PROT_RWX, UVM_INH_NONE,
-	    UVM_ADV_RANDOM, UVM_FLAG_FIXED|UVM_FLAG_UNMAP));
+	error = uvm_map(&mach->vm->vm_map, &va, args->size, uobj, off, 0,
+	    UVM_MAPFLAG(args->prot, PROT_READ | PROT_WRITE | PROT_EXEC,
+	    PROT_NONE, MADV_RANDOM, UVM_FLAG_FIXED|UVM_FLAG_UNMAP));
 	if (error) {
 		uao_detach(uobj);
 		goto out;
 	}
+	gpa = va;
 	if (gpa != args->gpa) {
 		uao_detach(uobj);
 		printf("[!] uvm_map problem\n");
@@ -961,7 +963,7 @@ nvmm_ident(void)
 {
 	size_t i;
 
-	for (i = 0; i < __arraycount(nvmm_impl_list); i++) {
+	for (i = 0; i < nitems(nvmm_impl_list); i++) {
 		if ((*nvmm_impl_list[i]->ident)())
 			return nvmm_impl_list[i];
 	}
@@ -980,12 +982,11 @@ nvmm_init(void)
 
 	for (i = 0; i < NVMM_MAX_MACHINES; i++) {
 		machines[i].machid = i;
-		rw_init(&machines[i].lock);
+		rw_init(&machines[i].lock, "nvmmlock");
 		for (n = 0; n < NVMM_MAX_VCPUS; n++) {
 			machines[i].cpus[n].present = false;
 			machines[i].cpus[n].cpuid = n;
-			mutex_init(&machines[i].cpus[n].lock, MUTEX_DEFAULT,
-			    IPL_NONE);
+			mtx_init(&machines[i].cpus[n].lock, IPL_NONE);
 		}
 	}
 
@@ -997,15 +998,6 @@ nvmm_init(void)
 static void
 nvmm_fini(void)
 {
-	size_t i, n;
-
-	for (i = 0; i < NVMM_MAX_MACHINES; i++) {
-		rw_destroy(&machines[i].lock);
-		for (n = 0; n < NVMM_MAX_VCPUS; n++) {
-			mutex_destroy(&machines[i].cpus[n].lock);
-		}
-	}
-
 	(*nvmm_impl->fini)();
 	nvmm_impl = NULL;
 }
@@ -1014,6 +1006,7 @@ nvmm_fini(void)
 
 static dev_type_open(nvmm_open);
 
+#if 0
 const struct cdevsw nvmm_cdevsw = {
 	.d_open = nvmm_open,
 	.d_close = noclose,
@@ -1028,6 +1021,7 @@ const struct cdevsw nvmm_cdevsw = {
 	.d_discard = nodiscard,
 	.d_flag = D_OTHER | D_MPSAFE
 };
+#endif
 
 static int nvmm_ioctl(file_t *, u_long, void *);
 static int nvmm_close(file_t *);
@@ -1067,7 +1061,7 @@ nvmm_open(dev_t dev, int flags, int type, struct lwp *l)
 	if (OFLAGS(flags) & O_WRONLY) {
 		owner = &root_owner;
 	} else {
-		owner = kmem_alloc(sizeof(*owner), KM_SLEEP);
+		owner = malloc(sizeof(*owner), M_DEVBUF, M_WAITOK);
 		owner->pid = l->l_proc->p_pid;
 	}
 
@@ -1082,7 +1076,7 @@ nvmm_close(file_t *fp)
 	KASSERT(owner != NULL);
 	nvmm_kill_machines(owner);
 	if (owner != &root_owner) {
-		kmem_free(owner, sizeof(*owner));
+		free(owner, M_DEVBUF, sizeof(*owner));
 	}
 	fp->f_data = NULL;
 
@@ -1117,7 +1111,7 @@ nvmm_mmap(file_t *fp, off_t *offp, size_t size, int prot, int *flagsp,
 	*uobjp = mach->commuobj;
 	*offp = cpuid * PAGE_SIZE;
 	*maxprotp = prot;
-	*advicep = UVM_ADV_RANDOM;
+	*advicep = MADV_RANDOM;
 
 	nvmm_machine_put(mach);
 	return 0;

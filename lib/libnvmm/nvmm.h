@@ -37,6 +37,32 @@
 #include <dev/nvmm/nvmm.h>
 #include <dev/nvmm/nvmm_ioctl.h>
 
+/* FIXME OpenBSD */
+#if 1
+#define __unreachable()	__builtin_unreachable()
+#define NBBY 8
+
+/* __BIT(n): nth bit, where __BIT(0) == 0x1. */
+#define __BIT(__n)	\
+    (((uintmax_t)(__n) >= NBBY * sizeof(uintmax_t)) ? 0 : \
+    ((uintmax_t)1 << (uintmax_t)((__n) & (NBBY * sizeof(uintmax_t) - 1))))
+
+/* Macros for min/max. */
+#define __MIN(a,b)	((/*CONSTCOND*/(a)<=(b))?(a):(b))
+#define __MAX(a,b)	((/*CONSTCOND*/(a)>(b))?(a):(b))
+
+/* __BITS(m, n): bits m through n, m < n. */
+#define __BITS(__m, __n)	\
+	((__BIT(__MAX((__m), (__n)) + 1) - 1) ^ (__BIT(__MIN((__m), (__n))) - 1))
+
+/* find least significant bit that is set */
+#define __LOWEST_SET_BIT(__mask) ((((__mask) - 1) & (__mask)) ^ (__mask))
+
+#define __SHIFTOUT(__x, __mask) (((__x) & (__mask)) / __LOWEST_SET_BIT(__mask))
+#define __SHIFTIN(__x, __mask) ((__x) * __LOWEST_SET_BIT(__mask))
+#define __SHIFTOUT_MASK(__mask) __SHIFTOUT((__mask), (__mask))
+#endif
+
 #define NVMM_USER_VERSION	2
 
 /*

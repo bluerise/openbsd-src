@@ -4,7 +4,7 @@
 
 MAN=	nvmmctl.8
 
-.if ${HAVE_NVMM:Uno} == "yes"
+#.if ${HAVE_NVMM:Uno} == "yes"
 USE_FORT?=yes	# setgid
 PROG=nvmmctl
 SRCS=nvmmctl.c
@@ -15,6 +15,6 @@ BINMODE=2555
 CPPFLAGS+=-D_KERNTYPES
 LDADD+=-lutil -lnvmm
 DPADD+=${LIBUTIL} ${LIBNVMM}
-.endif
+#.endif
 
 .include <bsd.prog.mk>

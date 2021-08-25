@@ -23,4 +23,4 @@ PROGS+=			h_mem_assist
 SRCS.h_mem_assist=	h_mem_assist.c h_mem_assist_asm.S
 .endif
 
-.include <bsd.test.mk>
+.include <bsd.regress.mk>

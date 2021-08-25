@@ -39,13 +39,14 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <machine/vmparam.h>
+#include <machine/param.h>
 #include <machine/pte.h>
 #include <machine/psl.h>
 
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 #define __cacheline_aligned __attribute__((__aligned__(64)))
 
-#include <x86/specialreg.h>
+#include <machine/specialreg.h>
 
 /* -------------------------------------------------------------------------- */
 
@@ -69,19 +70,19 @@ nvmm_vcpu_dump(struct nvmm_machine *mach, struct nvmm_vcpu *vcpu)
 		return -1;
 
 	printf("+ VCPU id=%d\n", (int)vcpu->cpuid);
-	printf("| -> RAX=%"PRIx64"\n", state->gprs[NVMM_X64_GPR_RAX]);
-	printf("| -> RCX=%"PRIx64"\n", state->gprs[NVMM_X64_GPR_RCX]);
-	printf("| -> RDX=%"PRIx64"\n", state->gprs[NVMM_X64_GPR_RDX]);
-	printf("| -> RBX=%"PRIx64"\n", state->gprs[NVMM_X64_GPR_RBX]);
-	printf("| -> RSP=%"PRIx64"\n", state->gprs[NVMM_X64_GPR_RSP]);
-	printf("| -> RBP=%"PRIx64"\n", state->gprs[NVMM_X64_GPR_RBP]);
-	printf("| -> RSI=%"PRIx64"\n", state->gprs[NVMM_X64_GPR_RSI]);
-	printf("| -> RDI=%"PRIx64"\n", state->gprs[NVMM_X64_GPR_RDI]);
-	printf("| -> RIP=%"PRIx64"\n", state->gprs[NVMM_X64_GPR_RIP]);
+	printf("| -> RAX=%llx\n", state->gprs[NVMM_X64_GPR_RAX]);
+	printf("| -> RCX=%llx\n", state->gprs[NVMM_X64_GPR_RCX]);
+	printf("| -> RDX=%llx\n", state->gprs[NVMM_X64_GPR_RDX]);
+	printf("| -> RBX=%llx\n", state->gprs[NVMM_X64_GPR_RBX]);
+	printf("| -> RSP=%llx\n", state->gprs[NVMM_X64_GPR_RSP]);
+	printf("| -> RBP=%llx\n", state->gprs[NVMM_X64_GPR_RBP]);
+	printf("| -> RSI=%llx\n", state->gprs[NVMM_X64_GPR_RSI]);
+	printf("| -> RDI=%llx\n", state->gprs[NVMM_X64_GPR_RDI]);
+	printf("| -> RIP=%llx\n", state->gprs[NVMM_X64_GPR_RIP]);
 	printf("| -> RFLAGS=%p\n", (void *)state->gprs[NVMM_X64_GPR_RFLAGS]);
 	for (i = 0; i < NVMM_X64_NSEG; i++) {
 		attr = (uint16_t *)&state->segs[i].attrib;
-		printf("| -> %s: sel=0x%x base=%"PRIx64", limit=%x, "
+		printf("| -> %s: sel=0x%x base=%llx, limit=%x, "
 		    "attrib=%x [type=%d,l=%d,def=%d]\n",
 		    segnames[i],
 		    state->segs[i].selector,
@@ -92,11 +93,11 @@ nvmm_vcpu_dump(struct nvmm_machine *mach, struct nvmm_vcpu *vcpu)
 		    state->segs[i].attrib.l,
 		    state->segs[i].attrib.def);
 	}
-	printf("| -> MSR_EFER=%"PRIx64"\n", state->msrs[NVMM_X64_MSR_EFER]);
-	printf("| -> CR0=%"PRIx64"\n", state->crs[NVMM_X64_CR_CR0]);
-	printf("| -> CR3=%"PRIx64"\n", state->crs[NVMM_X64_CR_CR3]);
-	printf("| -> CR4=%"PRIx64"\n", state->crs[NVMM_X64_CR_CR4]);
-	printf("| -> CR8=%"PRIx64"\n", state->crs[NVMM_X64_CR_CR8]);
+	printf("| -> MSR_EFER=%llx\n", state->msrs[NVMM_X64_MSR_EFER]);
+	printf("| -> CR0=%llx\n", state->crs[NVMM_X64_CR_CR0]);
+	printf("| -> CR3=%llx\n", state->crs[NVMM_X64_CR_CR3]);
+	printf("| -> CR4=%llx\n", state->crs[NVMM_X64_CR_CR4]);
+	printf("| -> CR8=%llx\n", state->crs[NVMM_X64_CR_CR8]);
 
 	return 0;
 }
@@ -137,36 +138,36 @@ x86_gva_to_gpa_32bit(struct nvmm_machine *mach, uint64_t cr3,
 		return -1;
 	pdir = (pte_32bit_t *)L2hva;
 	pte = pdir[pte32_l2idx(gva)];
-	if ((pte & PTE_P) == 0)
+	if ((pte & PG_V) == 0)
 		return -1;
-	if ((pte & PTE_U) == 0)
+	if ((pte & PG_U) == 0)
 		*prot &= ~NVMM_PROT_USER;
-	if ((pte & PTE_W) == 0)
+	if ((pte & PG_RW) == 0)
 		*prot &= ~NVMM_PROT_WRITE;
-	if ((pte & PTE_PS) && !has_pse)
+	if ((pte & PG_PS) && !has_pse)
 		return -1;
-	if (pte & PTE_PS) {
+	if (pte & PG_PS) {
 		*gpa = (pte & PTE32_L2_FRAME);
 		*gpa = *gpa + (gva & PTE32_L1_MASK);
 		return 0;
 	}
 
 	/* Parse L1. */
-	L1gpa = (pte & PTE_FRAME);
+	L1gpa = (pte & PG_FRAME);
 	if (nvmm_gpa_to_hva(mach, L1gpa, &L1hva, &pageprot) == -1)
 		return -1;
 	pdir = (pte_32bit_t *)L1hva;
 	pte = pdir[pte32_l1idx(gva)];
-	if ((pte & PTE_P) == 0)
+	if ((pte & PG_V) == 0)
 		return -1;
-	if ((pte & PTE_U) == 0)
+	if ((pte & PG_U) == 0)
 		*prot &= ~NVMM_PROT_USER;
-	if ((pte & PTE_W) == 0)
+	if ((pte & PG_RW) == 0)
 		*prot &= ~NVMM_PROT_WRITE;
-	if (pte & PTE_PS)
+	if (pte & PG_PS)
 		return -1;
 
-	*gpa = (pte & PTE_FRAME);
+	*gpa = (pte & PG_FRAME);
 	return 0;
 }
 
@@ -210,51 +211,51 @@ x86_gva_to_gpa_32bit_pae(struct nvmm_machine *mach, uint64_t cr3,
 		return -1;
 	pdir = (pte_32bit_pae_t *)L3hva;
 	pte = pdir[pte32_pae_l3idx(gva)];
-	if ((pte & PTE_P) == 0)
+	if ((pte & PG_V) == 0)
 		return -1;
-	if (pte & PTE_NX)
+	if (pte & PG_NX)
 		*prot &= ~NVMM_PROT_EXEC;
-	if (pte & PTE_PS)
+	if (pte & PG_PS)
 		return -1;
 
 	/* Parse L2. */
-	L2gpa = (pte & PTE_FRAME);
+	L2gpa = (pte & PG_FRAME);
 	if (nvmm_gpa_to_hva(mach, L2gpa, &L2hva, &pageprot) == -1)
 		return -1;
 	pdir = (pte_32bit_pae_t *)L2hva;
 	pte = pdir[pte32_pae_l2idx(gva)];
-	if ((pte & PTE_P) == 0)
+	if ((pte & PG_V) == 0)
 		return -1;
-	if ((pte & PTE_U) == 0)
+	if ((pte & PG_U) == 0)
 		*prot &= ~NVMM_PROT_USER;
-	if ((pte & PTE_W) == 0)
+	if ((pte & PG_RW) == 0)
 		*prot &= ~NVMM_PROT_WRITE;
-	if (pte & PTE_NX)
+	if (pte & PG_NX)
 		*prot &= ~NVMM_PROT_EXEC;
-	if (pte & PTE_PS) {
+	if (pte & PG_PS) {
 		*gpa = (pte & PTE32_PAE_L2_FRAME);
 		*gpa = *gpa + (gva & PTE32_PAE_L1_MASK);
 		return 0;
 	}
 
 	/* Parse L1. */
-	L1gpa = (pte & PTE_FRAME);
+	L1gpa = (pte & PG_FRAME);
 	if (nvmm_gpa_to_hva(mach, L1gpa, &L1hva, &pageprot) == -1)
 		return -1;
 	pdir = (pte_32bit_pae_t *)L1hva;
 	pte = pdir[pte32_pae_l1idx(gva)];
-	if ((pte & PTE_P) == 0)
+	if ((pte & PG_V) == 0)
 		return -1;
-	if ((pte & PTE_U) == 0)
+	if ((pte & PG_U) == 0)
 		*prot &= ~NVMM_PROT_USER;
-	if ((pte & PTE_W) == 0)
+	if ((pte & PG_RW) == 0)
 		*prot &= ~NVMM_PROT_WRITE;
-	if (pte & PTE_NX)
+	if (pte & PG_NX)
 		*prot &= ~NVMM_PROT_EXEC;
-	if (pte & PTE_PS)
+	if (pte & PG_PS)
 		return -1;
 
-	*gpa = (pte & PTE_FRAME);
+	*gpa = (pte & PG_FRAME);
 	return 0;
 }
 
@@ -313,75 +314,75 @@ x86_gva_to_gpa_64bit(struct nvmm_machine *mach, uint64_t cr3,
 		return -1;
 	pdir = (pte_64bit_t *)L4hva;
 	pte = pdir[pte64_l4idx(gva)];
-	if ((pte & PTE_P) == 0)
+	if ((pte & PG_V) == 0)
 		return -1;
-	if ((pte & PTE_U) == 0)
+	if ((pte & PG_U) == 0)
 		*prot &= ~NVMM_PROT_USER;
-	if ((pte & PTE_W) == 0)
+	if ((pte & PG_RW) == 0)
 		*prot &= ~NVMM_PROT_WRITE;
-	if (pte & PTE_NX)
+	if (pte & PG_NX)
 		*prot &= ~NVMM_PROT_EXEC;
-	if (pte & PTE_PS)
+	if (pte & PG_PS)
 		return -1;
 
 	/* Parse L3. */
-	L3gpa = (pte & PTE_FRAME);
+	L3gpa = (pte & PG_FRAME);
 	if (nvmm_gpa_to_hva(mach, L3gpa, &L3hva, &pageprot) == -1)
 		return -1;
 	pdir = (pte_64bit_t *)L3hva;
 	pte = pdir[pte64_l3idx(gva)];
-	if ((pte & PTE_P) == 0)
+	if ((pte & PG_V) == 0)
 		return -1;
-	if ((pte & PTE_U) == 0)
+	if ((pte & PG_U) == 0)
 		*prot &= ~NVMM_PROT_USER;
-	if ((pte & PTE_W) == 0)
+	if ((pte & PG_RW) == 0)
 		*prot &= ~NVMM_PROT_WRITE;
-	if (pte & PTE_NX)
+	if (pte & PG_NX)
 		*prot &= ~NVMM_PROT_EXEC;
-	if (pte & PTE_PS) {
+	if (pte & PG_PS) {
 		*gpa = (pte & PTE64_L3_FRAME);
 		*gpa = *gpa + (gva & (PTE64_L2_MASK|PTE64_L1_MASK));
 		return 0;
 	}
 
 	/* Parse L2. */
-	L2gpa = (pte & PTE_FRAME);
+	L2gpa = (pte & PG_FRAME);
 	if (nvmm_gpa_to_hva(mach, L2gpa, &L2hva, &pageprot) == -1)
 		return -1;
 	pdir = (pte_64bit_t *)L2hva;
 	pte = pdir[pte64_l2idx(gva)];
-	if ((pte & PTE_P) == 0)
+	if ((pte & PG_V) == 0)
 		return -1;
-	if ((pte & PTE_U) == 0)
+	if ((pte & PG_U) == 0)
 		*prot &= ~NVMM_PROT_USER;
-	if ((pte & PTE_W) == 0)
+	if ((pte & PG_RW) == 0)
 		*prot &= ~NVMM_PROT_WRITE;
-	if (pte & PTE_NX)
+	if (pte & PG_NX)
 		*prot &= ~NVMM_PROT_EXEC;
-	if (pte & PTE_PS) {
+	if (pte & PG_PS) {
 		*gpa = (pte & PTE64_L2_FRAME);
 		*gpa = *gpa + (gva & PTE64_L1_MASK);
 		return 0;
 	}
 
 	/* Parse L1. */
-	L1gpa = (pte & PTE_FRAME);
+	L1gpa = (pte & PG_FRAME);
 	if (nvmm_gpa_to_hva(mach, L1gpa, &L1hva, &pageprot) == -1)
 		return -1;
 	pdir = (pte_64bit_t *)L1hva;
 	pte = pdir[pte64_l1idx(gva)];
-	if ((pte & PTE_P) == 0)
+	if ((pte & PG_V) == 0)
 		return -1;
-	if ((pte & PTE_U) == 0)
+	if ((pte & PG_U) == 0)
 		*prot &= ~NVMM_PROT_USER;
-	if ((pte & PTE_W) == 0)
+	if ((pte & PG_RW) == 0)
 		*prot &= ~NVMM_PROT_WRITE;
-	if (pte & PTE_NX)
+	if (pte & PG_NX)
 		*prot &= ~NVMM_PROT_EXEC;
-	if (pte & PTE_PS)
+	if (pte & PG_PS)
 		return -1;
 
-	*gpa = (pte & PTE_FRAME);
+	*gpa = (pte & PG_FRAME);
 	return 0;
 }
 

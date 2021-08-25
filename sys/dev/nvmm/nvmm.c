@@ -995,12 +995,14 @@ nvmm_init(void)
 	return 0;
 }
 
+#if 0
 static void
 nvmm_fini(void)
 {
 	(*nvmm_impl->fini)();
 	nvmm_impl = NULL;
 }
+#endif
 
 /* -------------------------------------------------------------------------- */
 
@@ -1164,140 +1166,40 @@ nvmm_ioctl(file_t *fp, u_long cmd, void *data)
 
 /* -------------------------------------------------------------------------- */
 
-static int nvmm_match(device_t, cfdata_t, void *);
-static void nvmm_attach(device_t, device_t, void *);
-static int nvmm_detach(device_t, int);
+int nvmm_probe(struct device *, void *, void *);
+void nvmm_attach(struct device *, struct device *, void *);
 
-extern struct cfdriver nvmm_cd;
-
-CFATTACH_DECL_NEW(nvmm, 0, nvmm_match, nvmm_attach, nvmm_detach, NULL);
-
-static struct cfdata nvmm_cfdata[] = {
-	{
-		.cf_name = "nvmm",
-		.cf_atname = "nvmm",
-		.cf_unit = 0,
-		.cf_fstate = FSTATE_STAR,
-		.cf_loc = NULL,
-		.cf_flags = 0,
-		.cf_pspec = NULL,
-	},
-	{ NULL, NULL, 0, FSTATE_NOTFOUND, NULL, 0, NULL }
+struct cfdriver nvmm_cd = {
+	NULL, "nvmm", DV_DULL
 };
 
-static int
-nvmm_match(device_t self, cfdata_t cfdata, void *arg)
+const struct cfattach nvmm_ca = {
+	sizeof(struct device), nvmm_probe, nvmm_attach, NULL, NULL
+};
+
+int
+nvmm_probe(struct device *parent, void *match, void *aux)
 {
-	return 1;
+	const char **busname = (const char **)aux;
+
+	if (strcmp(*busname, nvmm_cd.cd_name) != 0)
+		return (0);
+	return (1);
 }
 
-static void
-nvmm_attach(device_t parent, device_t self, void *aux)
+void
+nvmm_attach(struct device *parent, struct device *self, void *aux)
 {
 	int error;
 
 	error = nvmm_init();
 	if (error)
 		panic("%s: impossible", __func__);
-	aprint_normal_dev(self, "attached, using backend %s\n",
-	    nvmm_impl->name);
+	printf("%s: attached, using backend %s\n",
+	    self->dv_xname, nvmm_impl->name);
 }
 
-static int
-nvmm_detach(device_t self, int flags)
+static void
+nvmm_attach(device_t parent, device_t self, void *aux)
 {
-	if (atomic_load_relaxed(&nmachines) > 0)
-		return EBUSY;
-	nvmm_fini();
-	return 0;
-}
-
-void
-nvmmattach(int nunits)
-{
-	/* nothing */
-}
-
-MODULE(MODULE_CLASS_MISC, nvmm, NULL);
-
-#if defined(_MODULE)
-CFDRIVER_DECL(nvmm, DV_VIRTUAL, NULL);
-#endif
-
-static int
-nvmm_modcmd(modcmd_t cmd, void *arg)
-{
-#if defined(_MODULE)
-	devmajor_t bmajor = NODEVMAJOR;
-	devmajor_t cmajor = 345;
-#endif
-	int error;
-
-	switch (cmd) {
-	case MODULE_CMD_INIT:
-		if (nvmm_ident() == NULL) {
-			aprint_error("%s: cpu not supported\n",
-			    nvmm_cd.cd_name);
-			return ENOTSUP;
-		}
-#if defined(_MODULE)
-		error = config_cfdriver_attach(&nvmm_cd);
-		if (error)
-			return error;
-#endif
-		error = config_cfattach_attach(nvmm_cd.cd_name, &nvmm_ca);
-		if (error) {
-			config_cfdriver_detach(&nvmm_cd);
-			aprint_error("%s: config_cfattach_attach failed\n",
-			    nvmm_cd.cd_name);
-			return error;
-		}
-
-		error = config_cfdata_attach(nvmm_cfdata, 1);
-		if (error) {
-			config_cfattach_detach(nvmm_cd.cd_name, &nvmm_ca);
-			config_cfdriver_detach(&nvmm_cd);
-			aprint_error("%s: unable to register cfdata\n",
-			    nvmm_cd.cd_name);
-			return error;
-		}
-
-		if (config_attach_pseudo(nvmm_cfdata) == NULL) {
-			aprint_error("%s: config_attach_pseudo failed\n",
-			    nvmm_cd.cd_name);
-			config_cfattach_detach(nvmm_cd.cd_name, &nvmm_ca);
-			config_cfdriver_detach(&nvmm_cd);
-			return ENXIO;
-		}
-
-#if defined(_MODULE)
-		/* mknod /dev/nvmm c 345 0 */
-		error = devsw_attach(nvmm_cd.cd_name, NULL, &bmajor,
-			&nvmm_cdevsw, &cmajor);
-		if (error) {
-			aprint_error("%s: unable to register devsw\n",
-			    nvmm_cd.cd_name);
-			config_cfattach_detach(nvmm_cd.cd_name, &nvmm_ca);
-			config_cfdriver_detach(&nvmm_cd);
-			return error;
-		}
-#endif
-		return 0;
-	case MODULE_CMD_FINI:
-		error = config_cfdata_detach(nvmm_cfdata);
-		if (error)
-			return error;
-		error = config_cfattach_detach(nvmm_cd.cd_name, &nvmm_ca);
-		if (error)
-			return error;
-#if defined(_MODULE)
-		config_cfdriver_detach(&nvmm_cd);
-		devsw_detach(NULL, &nvmm_cdevsw);
-#endif
-		return 0;
-	case MODULE_CMD_AUTOUNLOAD:
-		return EBUSY;
-	default:
-		return ENOTTY;
-	}
 }

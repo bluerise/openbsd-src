@@ -569,6 +569,9 @@
 #define	EFER_LMA	0x00000400	/* Long Mode Active */
 #define EFER_NXE	0x00000800	/* No-Execute Enabled */
 #define EFER_SVME	0x00001000	/* SVM Enabled */
+#define EFER_LMSLE	0x00002000	/* Long Mode Segment Limit E. */
+#define EFER_FFXSR	0x00004000	/* Fast FXSAVE/FXRSTOR En. */
+#define EFER_TCE	0x00008000	/* Translation Cache Ext. */
 
 #define MSR_STAR	0xc0000081	/* 32 bit syscall gate addr */
 #define MSR_LSTAR	0xc0000082	/* 64 bit syscall gate addr */
@@ -597,6 +600,7 @@
 #define	MSR_NB_CFG	0xc001001f
 #define		NB_CFG_DISIOREQLOCK	0x0000000000000004ULL
 #define		NB_CFG_DISDATMSK	0x0000001000000000ULL
+#define		NB_CFG_INITAPICCPUIDLO	(1ULL << 54)
 
 #define	MSR_LS_CFG	0xc0011020
 #define		LS_CFG_DIS_LS2_SQUISH	0x02000000
@@ -1338,10 +1342,14 @@
  */
 #define MSR_AMD_VM_CR			0xc0010114
 #define MSR_AMD_VM_HSAVE_PA		0xc0010117
+#define AMD_SVM_REV			(0xff << 0)
 #define CPUID_AMD_SVM_CAP		0x8000000A
 #define AMD_SVM_NESTED_PAGING_CAP	(1 << 0)
+#define AMD_SVM_NRIPS_CAP		(1 << 3)
 #define AMD_SVM_VMCB_CLEAN_CAP		(1 << 5)
 #define AMD_SVM_FLUSH_BY_ASID_CAP	(1 << 6)
+#define AMD_SVM_DECODE_ASSIST_CAP	(1 << 7)
+#define AMD_SVMLOCK			0x8
 #define AMD_SVMDIS			0x10
 
 #define SVM_TLB_CONTROL_FLUSH_NONE	0

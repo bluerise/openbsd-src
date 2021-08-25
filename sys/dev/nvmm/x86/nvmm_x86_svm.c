@@ -34,18 +34,19 @@
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/kernel.h>
-#include <sys/kmem.h>
-#include <sys/cpu.h>
-#include <sys/xcall.h>
+#include <sys/malloc.h>
+//#include <sys/cpu.h>
+#//include <sys/xcall.h>
 #include <sys/mman.h>
+#include <sys/proc.h>
 
 #include <uvm/uvm_extern.h>
 #include <uvm/uvm_page.h>
 
-#include <x86/cputypes.h>
-#include <x86/specialreg.h>
-#include <x86/dbregs.h>
-#include <x86/cpu_counter.h>
+//#include <x86/cputypes.h>
+#include <machine/specialreg.h>
+//#include <x86/dbregs.h>
+//#include <x86/cpu_counter.h>
 
 #include <machine/cpuvar.h>
 
@@ -493,7 +494,7 @@ static struct svm_hsave hsave[MAXCPUS];
 
 static uint8_t *svm_asidmap __read_mostly;
 static uint32_t svm_maxasid __read_mostly;
-static kmutex_t svm_asidlock __cacheline_aligned;
+static struct mutex svm_asidlock __cacheline_aligned;
 
 static bool svm_decode_assist __read_mostly;
 static uint32_t svm_ctrl_tlb_flush __read_mostly;
@@ -525,7 +526,7 @@ static uint64_t svm_xcr0_mask __read_mostly;
 /* -------------------------------------------------------------------------- */
 
 struct svm_machdata {
-	volatile uint64_t mach_htlb_gen;
+	volatile long mach_htlb_gen;
 };
 
 static const size_t svm_vcpu_conf_sizes[NVMM_X86_VCPU_NCONF] = {
@@ -573,7 +574,7 @@ struct svm_cpudata {
 	uint64_t gprs[NVMM_X64_NGPR];
 	uint64_t drs[NVMM_X64_NDR];
 	uint64_t gtsc;
-	struct xsave_header gfpu __aligned(64);
+	struct savefpu gfpu __aligned(64);
 
 	/* VCPU configuration. */
 	bool cpuidpresent[SVM_NCPUIDS];
@@ -763,7 +764,7 @@ static void
 svm_inject_ud(struct nvmm_cpu *vcpu)
 {
 	struct nvmm_comm_page *comm = vcpu->comm;
-	int ret __diagused;
+	int ret;
 
 	comm->event.type = NVMM_VCPU_EVENT_EXCP;
 	comm->event.vector = 6;
@@ -777,7 +778,7 @@ static void
 svm_inject_gp(struct nvmm_cpu *vcpu)
 {
 	struct nvmm_comm_page *comm = vcpu->comm;
-	int ret __diagused;
+	int ret;
 
 	comm->event.type = NVMM_VCPU_EVENT_EXCP;
 	comm->event.vector = 13;
@@ -821,7 +822,7 @@ svm_inkernel_exec_cpuid(struct svm_cpudata *cpudata, uint64_t eax, uint64_t ecx)
 {
 	u_int descs[4];
 
-	x86_cpuid2(eax, ecx, descs);
+	CPUID_LEAF(eax, ecx, descs[0], descs[1], descs[2], descs[3]);
 	cpudata->vmcb->state.rax = descs[0];
 	cpudata->gprs[NVMM_X64_GPR_RBX] = descs[1];
 	cpudata->gprs[NVMM_X64_GPR_RCX] = descs[2];
@@ -863,14 +864,14 @@ svm_inkernel_handle_cpuid(struct nvmm_cpu *vcpu, uint64_t eax, uint64_t ecx)
 		    CPUID_LOCAL_APIC_ID);
 
 		cpudata->gprs[NVMM_X64_GPR_RCX] &= nvmm_cpuid_00000001.ecx;
-		cpudata->gprs[NVMM_X64_GPR_RCX] |= CPUID2_RAZ;
+		cpudata->gprs[NVMM_X64_GPR_RCX] |= CPUIDECX_HV;
 
 		cpudata->gprs[NVMM_X64_GPR_RDX] &= nvmm_cpuid_00000001.edx;
 
 		/* CPUID2_OSXSAVE depends on CR4. */
 		cr4 = cpudata->vmcb->state.cr4;
 		if (!(cr4 & CR4_OSXSAVE)) {
-			cpudata->gprs[NVMM_X64_GPR_RCX] &= ~CPUID2_OSXSAVE;
+			cpudata->gprs[NVMM_X64_GPR_RCX] &= ~CPUIDECX_OSXSAVE;
 		}
 		break;
 	case 0x00000002: /* Empty */
@@ -917,18 +918,20 @@ svm_inkernel_handle_cpuid(struct nvmm_cpu *vcpu, uint64_t eax, uint64_t ecx)
 		case 0:
 			cpudata->vmcb->state.rax = svm_xcr0_mask & 0xFFFFFFFF;
 			if (cpudata->gxcr0 & XCR0_SSE) {
-				cpudata->gprs[NVMM_X64_GPR_RBX] = sizeof(struct fxsave);
+				cpudata->gprs[NVMM_X64_GPR_RBX] = sizeof(struct fxsave64);
 			} else {
-				cpudata->gprs[NVMM_X64_GPR_RBX] = sizeof(struct save87);
+				/* FIXME */
+				panic("%s:%d", __func__, __LINE__);
+//				cpudata->gprs[NVMM_X64_GPR_RBX] = sizeof(struct save87);
 			}
 			cpudata->gprs[NVMM_X64_GPR_RBX] += 64; /* XSAVE header */
-			cpudata->gprs[NVMM_X64_GPR_RCX] = sizeof(struct fxsave) + 64;
+			cpudata->gprs[NVMM_X64_GPR_RCX] = sizeof(struct fxsave64) + 64;
 			cpudata->gprs[NVMM_X64_GPR_RDX] = svm_xcr0_mask >> 32;
 			break;
 		case 1:
 			cpudata->vmcb->state.rax &=
-			    (CPUID_PES1_XSAVEOPT | CPUID_PES1_XSAVEC |
-			     CPUID_PES1_XGETBV);
+			    (XSAVE_XSAVEOPT | XSAVE_XSAVEC |
+			     XSAVE_XGETBV1);
 			cpudata->gprs[NVMM_X64_GPR_RBX] = 0;
 			cpudata->gprs[NVMM_X64_GPR_RCX] = 0;
 			cpudata->gprs[NVMM_X64_GPR_RDX] = 0;
@@ -1156,7 +1159,7 @@ static const uint64_t msr_ignore_list[] = {
 	0xc0010055, /* MSR_CMPHALT */
 	MSR_DE_CFG,
 	MSR_IC_CFG,
-	MSR_UCODE_AMD_PATCHLEVEL
+	MSR_PATCH_LEVEL
 };
 
 static bool
@@ -1181,7 +1184,7 @@ svm_inkernel_handle_msr(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 			cpudata->gprs[NVMM_X64_GPR_RDX] = (val >> 32);
 			goto handled;
 		}
-		for (i = 0; i < __arraycount(msr_ignore_list); i++) {
+		for (i = 0; i < nitems(msr_ignore_list); i++) {
 			if (msr_ignore_list[i] != exit->u.rdmsr.msr)
 				continue;
 			val = 0;
@@ -1207,7 +1210,7 @@ svm_inkernel_handle_msr(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 			cpudata->gtsc_want_update = true;
 			goto handled;
 		}
-		for (i = 0; i < __arraycount(msr_ignore_list); i++) {
+		for (i = 0; i < nitems(msr_ignore_list); i++) {
 			if (msr_ignore_list[i] != exit->u.wrmsr.msr)
 				continue;
 			goto handled;
@@ -1350,13 +1353,13 @@ svm_vcpu_guest_fpu_enter(struct nvmm_cpu *vcpu)
 {
 	struct svm_cpudata *cpudata = vcpu->cpudata;
 
-	fpu_kern_enter();
+	fpu_kernel_enter();
 	/* TODO: should we use *XSAVE64 here? */
 	fpu_area_restore(&cpudata->gfpu, svm_xcr0_mask, false);
 
 	if (svm_xcr0_mask != 0) {
-		cpudata->hxcr0 = rdxcr(0);
-		wrxcr(0, cpudata->gxcr0);
+		cpudata->hxcr0 = xgetbv(0);
+		xsetbv_user(0, cpudata->gxcr0);
 	}
 }
 
@@ -1366,15 +1369,16 @@ svm_vcpu_guest_fpu_leave(struct nvmm_cpu *vcpu)
 	struct svm_cpudata *cpudata = vcpu->cpudata;
 
 	if (svm_xcr0_mask != 0) {
-		cpudata->gxcr0 = rdxcr(0);
-		wrxcr(0, cpudata->hxcr0);
+		cpudata->gxcr0 = xgetbv(0);
+		xsetbv_user(0, cpudata->hxcr0);
 	}
 
 	/* TODO: should we use *XSAVE64 here? */
 	fpu_area_save(&cpudata->gfpu, svm_xcr0_mask, false);
-	fpu_kern_leave();
+	fpu_kernel_exit();
 }
 
+#if 0
 static void
 svm_vcpu_guest_dbregs_enter(struct nvmm_cpu *vcpu)
 {
@@ -1402,6 +1406,7 @@ svm_vcpu_guest_dbregs_leave(struct nvmm_cpu *vcpu)
 
 	x86_dbregs_restore(curlwp);
 }
+#endif
 
 static void
 svm_vcpu_guest_misc_enter(struct nvmm_cpu *vcpu)
@@ -1502,7 +1507,7 @@ svm_vcpu_run(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 		return EINVAL;
 	}
 
-	kpreempt_disable();
+	/*kpreempt_disable();*/
 	hcpu = cpu_number();
 
 	svm_gtlb_catchup(vcpu, hcpu);
@@ -1513,7 +1518,9 @@ svm_vcpu_run(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 		cpudata->gtsc_want_update = true;
 	}
 
+#if 0
 	svm_vcpu_guest_dbregs_enter(vcpu);
+#endif
 	svm_vcpu_guest_misc_enter(vcpu);
 
 	while (1) {
@@ -1623,9 +1630,11 @@ svm_vcpu_run(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 	cpudata->gtsc = rdtsc() + vmcb->ctrl.tsc_offset;
 
 	svm_vcpu_guest_misc_leave(vcpu);
+#if 0
 	svm_vcpu_guest_dbregs_leave(vcpu);
+#endif
 
-	kpreempt_enable();
+	/*kpreempt_enable();*/
 
 	exit->exitstate.rflags = vmcb->state.rflags;
 	exit->exitstate.cr8 = __SHIFTOUT(vmcb->ctrl.v, VMCB_CTRL_V_TPR);
@@ -1654,14 +1663,14 @@ svm_memalloc(paddr_t *pa, vaddr_t *va, size_t npages)
 	if (ret != 0)
 		return ENOMEM;
 	_pa = VM_PAGE_TO_PHYS(TAILQ_FIRST(&pglist));
-	_va = uvm_km_alloc(kernel_map, npages * PAGE_SIZE, 0,
-	    UVM_KMF_VAONLY | UVM_KMF_NOWAIT);
+	_va = (vaddr_t)km_alloc(npages * PAGE_SIZE, &kv_any, &kp_none,
+	    &kd_nowait);
 	if (_va == 0)
 		goto error;
 
 	for (i = 0; i < npages; i++) {
 		pmap_kenter_pa(_va + i * PAGE_SIZE, _pa + i * PAGE_SIZE,
-		    VM_PROT_READ | VM_PROT_WRITE, PMAP_WRITE_BACK);
+		    PROT_READ | PROT_WRITE);
 	}
 	pmap_update(pmap_kernel());
 
@@ -1685,7 +1694,7 @@ svm_memfree(paddr_t pa, vaddr_t va, size_t npages)
 
 	pmap_kremove(va, npages * PAGE_SIZE);
 	pmap_update(pmap_kernel());
-	uvm_km_free(kernel_map, va, npages * PAGE_SIZE, UVM_KMF_VAONLY);
+	km_free((void *)va, npages * PAGE_SIZE, &kv_any, &kp_none);
 	for (i = 0; i < npages; i++) {
 		uvm_pagefree(PHYS_TO_VM_PAGE(pa + i * PAGE_SIZE));
 	}
@@ -1803,7 +1812,7 @@ svm_vcpu_setstate(struct nvmm_cpu *vcpu)
 	const struct nvmm_x64_state *state = &comm->state;
 	struct svm_cpudata *cpudata = vcpu->cpudata;
 	struct vmcb *vmcb = cpudata->vmcb;
-	struct fxsave *fpustate;
+	struct fxsave64 *fpustate;
 	uint64_t flags;
 
 	flags = comm->state_wanted;
@@ -1916,18 +1925,18 @@ svm_vcpu_setstate(struct nvmm_cpu *vcpu)
 		}
 	}
 
-	CTASSERT(sizeof(cpudata->gfpu.xsh_fxsave) == sizeof(state->fpu));
+	CTASSERT(sizeof(cpudata->gfpu.fp_fxsave) == sizeof(state->fpu));
 	if (flags & NVMM_X64_STATE_FPU) {
-		memcpy(cpudata->gfpu.xsh_fxsave, &state->fpu,
+		memcpy(&cpudata->gfpu.fp_fxsave, &state->fpu,
 		    sizeof(state->fpu));
 
-		fpustate = (struct fxsave *)cpudata->gfpu.xsh_fxsave;
-		fpustate->fx_mxcsr_mask &= x86_fpu_mxcsr_mask;
+		fpustate = &cpudata->gfpu.fp_fxsave;
+		fpustate->fx_mxcsr_mask &= fpu_mxcsr_mask;
 		fpustate->fx_mxcsr &= fpustate->fx_mxcsr_mask;
 
 		if (svm_xcr0_mask != 0) {
 			/* Reset XSTATE_BV, to force a reload. */
-			cpudata->gfpu.xsh_xstate_bv = svm_xcr0_mask;
+			cpudata->gfpu.fp_xstate.xstate_bv = vmx_xcr0_mask;
 		}
 	}
 
@@ -2030,9 +2039,9 @@ svm_vcpu_getstate(struct nvmm_cpu *vcpu)
 		state->intr.evt_pending = cpudata->evt_pending;
 	}
 
-	CTASSERT(sizeof(cpudata->gfpu.xsh_fxsave) == sizeof(state->fpu));
+	CTASSERT(sizeof(cpudata->gfpu.fp_fxsave) == sizeof(state->fpu));
 	if (flags & NVMM_X64_STATE_FPU) {
-		memcpy(&state->fpu, cpudata->gfpu.xsh_fxsave,
+		memcpy(&state->fpu, &cpudata->gfpu.fp_fxsave,
 		    sizeof(state->fpu));
 	}
 
@@ -2064,7 +2073,7 @@ svm_asid_alloc(struct nvmm_cpu *vcpu)
 	struct vmcb *vmcb = cpudata->vmcb;
 	size_t i, oct, bit;
 
-	mutex_enter(&svm_asidlock);
+	mtx_enter(&svm_asidlock);
 
 	for (i = 0; i < svm_maxasid; i++) {
 		oct = i / 8;
@@ -2076,7 +2085,7 @@ svm_asid_alloc(struct nvmm_cpu *vcpu)
 
 		svm_asidmap[oct] |= __BIT(bit);
 		vmcb->ctrl.guest_asid = i;
-		mutex_exit(&svm_asidlock);
+		mtx_leave(&svm_asidlock);
 		return;
 	}
 
@@ -2086,7 +2095,7 @@ svm_asid_alloc(struct nvmm_cpu *vcpu)
 	 */
 	cpudata->shared_asid = true;
 	vmcb->ctrl.guest_asid = svm_maxasid - 1;
-	mutex_exit(&svm_asidlock);
+	mtx_leave(&svm_asidlock);
 }
 
 static void
@@ -2103,9 +2112,9 @@ svm_asid_free(struct nvmm_cpu *vcpu)
 	oct = vmcb->ctrl.guest_asid / 8;
 	bit = vmcb->ctrl.guest_asid % 8;
 
-	mutex_enter(&svm_asidlock);
+	mtx_enter(&svm_asidlock);
 	svm_asidmap[oct] &= ~__BIT(bit);
-	mutex_exit(&svm_asidlock);
+	mtx_leave(&svm_asidlock);
 }
 
 static void
@@ -2224,8 +2233,8 @@ svm_vcpu_init(struct nvmm_machine *mach, struct nvmm_cpu *vcpu)
 	vmcb->ctrl.n_cr3 = mach->vm->vm_map.pmap->pm_pdirpa[0];
 
 	/* Init XSAVE header. */
-	cpudata->gfpu.xsh_xstate_bv = svm_xcr0_mask;
-	cpudata->gfpu.xsh_xcomp_bv = 0;
+	cpudata->gfpu.fp_xstate.xstate_bv = svm_xcr0_mask;
+	cpudata->gfpu.fp_xstate.xstate_xcomp_bv = 0;
 
 	/* These MSRs are static. */
 	cpudata->star = rdmsr(MSR_STAR);
@@ -2248,9 +2257,8 @@ svm_vcpu_create(struct nvmm_machine *mach, struct nvmm_cpu *vcpu)
 	int error;
 
 	/* Allocate the SVM cpudata. */
-	cpudata = (struct svm_cpudata *)uvm_km_alloc(kernel_map,
-	    roundup(sizeof(*cpudata), PAGE_SIZE), 0,
-	    UVM_KMF_WIRED|UVM_KMF_ZERO);
+	cpudata = (struct svm_cpudata *)km_alloc(roundup(sizeof(*cpudata), PAGE_SIZE),
+	    &kv_any, &kp_zero, &kd_waitok);
 	vcpu->cpudata = cpudata;
 
 	/* VMCB */
@@ -2289,8 +2297,7 @@ error:
 		svm_memfree(cpudata->msrbm_pa, (vaddr_t)cpudata->msrbm,
 		    MSRBM_NPAGES);
 	}
-	uvm_km_free(kernel_map, (vaddr_t)cpudata,
-	    roundup(sizeof(*cpudata), PAGE_SIZE), UVM_KMF_WIRED);
+	km_free(cpudata, roundup(sizeof(*cpudata), PAGE_SIZE), &kv_any, &kp_zero);
 	return error;
 }
 
@@ -2305,8 +2312,7 @@ svm_vcpu_destroy(struct nvmm_machine *mach, struct nvmm_cpu *vcpu)
 	svm_memfree(cpudata->iobm_pa, (vaddr_t)cpudata->iobm, IOBM_NPAGES);
 	svm_memfree(cpudata->msrbm_pa, (vaddr_t)cpudata->msrbm, MSRBM_NPAGES);
 
-	uvm_km_free(kernel_map, (vaddr_t)cpudata,
-	    roundup(sizeof(*cpudata), PAGE_SIZE), UVM_KMF_WIRED);
+	km_free(cpudata, roundup(sizeof(*cpudata), PAGE_SIZE), &kv_any, &kp_zero);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2387,7 +2393,7 @@ svm_tlb_flush(struct pmap *pm)
 	struct nvmm_machine *mach = pm->pm_data;
 	struct svm_machdata *machdata = mach->machdata;
 
-	atomic_inc_64(&machdata->mach_htlb_gen);
+	atomic_inc_long(&machdata->mach_htlb_gen);
 
 	/* Generates IPIs, which cause #VMEXITs. */
 	pmap_tlb_shootdown(pmap_kernel(), -1, PTE_G, TLBSHOOT_NVMM);
@@ -2402,7 +2408,8 @@ svm_machine_create(struct nvmm_machine *mach)
 	mach->vm->vm_map.pmap->pm_data = (void *)mach;
 	mach->vm->vm_map.pmap->pm_tlb_flush = svm_tlb_flush;
 
-	machdata = kmem_zalloc(sizeof(struct svm_machdata), KM_SLEEP);
+	machdata = malloc(sizeof(struct svm_machdata), M_DEVBUF,
+	    M_ZERO | M_WAITOK);
 	mach->machdata = machdata;
 
 	/* Start with an hTLB flush everywhere. */
@@ -2412,7 +2419,7 @@ svm_machine_create(struct nvmm_machine *mach)
 static void
 svm_machine_destroy(struct nvmm_machine *mach)
 {
-	kmem_free(mach->machdata, sizeof(struct svm_machdata));
+	free(mach->machdata, M_DEVBUF, sizeof(struct svm_machdata));
 }
 
 static int
@@ -2429,42 +2436,42 @@ svm_ident(void)
 	u_int descs[4];
 	uint64_t msr;
 
-	if (cpu_vendor != CPUVENDOR_AMD) {
+	if (strcmp(cpu_vendor, "AuthenticAMD") != 0) {
 		return false;
 	}
-	if (!(cpu_feature[3] & CPUID_SVM)) {
+	if (!(ecpu_ecxfeature & CPUIDECX_SVM)) {
 		printf("NVMM: SVM not supported\n");
 		return false;
 	}
 
-	if (curcpu()->ci_max_ext_cpuid < 0x8000000a) {
+	if (curcpu()->ci_pnfeatset < 0x8000000a) {
 		printf("NVMM: CPUID leaf not available\n");
 		return false;
 	}
-	x86_cpuid(0x8000000a, descs);
+	CPUID(0x8000000a, descs[0], descs[1], descs[2], descs[3]);
 
 	/* Expect revision 1. */
-	if (__SHIFTOUT(descs[0], CPUID_AMD_SVM_REV) != 1) {
+	if (__SHIFTOUT(descs[0], AMD_SVM_REV) != 1) {
 		printf("NVMM: SVM revision not supported\n");
 		return false;
 	}
 
 	/* Want Nested Paging. */
-	if (!(descs[3] & CPUID_AMD_SVM_NP)) {
+	if (!(descs[3] & AMD_SVM_NESTED_PAGING_CAP)) {
 		printf("NVMM: SVM-NP not supported\n");
 		return false;
 	}
 
 	/* Want nRIP. */
-	if (!(descs[3] & CPUID_AMD_SVM_NRIPS)) {
+	if (!(descs[3] & AMD_SVM_NRIPS_CAP)) {
 		printf("NVMM: SVM-NRIPS not supported\n");
 		return false;
 	}
 
-	svm_decode_assist = (descs[3] & CPUID_AMD_SVM_DecodeAssist) != 0;
+	svm_decode_assist = (descs[3] & AMD_SVM_DECODE_ASSIST_CAP) != 0;
 
-	msr = rdmsr(MSR_VMCR);
-	if ((msr & VMCR_SVMED) && (msr & VMCR_LOCK)) {
+	msr = rdmsr(MSR_AMD_VM_CR);
+	if ((msr & AMD_SVMDIS) && (msr & AMD_SVMLOCK)) {
 		printf("NVMM: SVM disabled in BIOS\n");
 		return false;
 	}
@@ -2477,14 +2484,14 @@ svm_init_asid(uint32_t maxasid)
 {
 	size_t i, j, allocsz;
 
-	mutex_init(&svm_asidlock, MUTEX_DEFAULT, IPL_NONE);
+	mtx_init(&svm_asidlock, IPL_NONE);
 
 	/* Arbitrarily limit. */
-	maxasid = uimin(maxasid, 8192);
+	maxasid = min(maxasid, 8192);
 
 	svm_maxasid = maxasid;
 	allocsz = roundup(maxasid, 8) / 8;
-	svm_asidmap = kmem_zalloc(allocsz, KM_SLEEP);
+	svm_asidmap = malloc(allocsz, M_DEVBUF, M_WAITOK | M_ZERO);
 
 	/* ASID 0 is reserved for the host. */
 	svm_asidmap[0] |= __BIT(0);
@@ -2501,9 +2508,9 @@ svm_change_cpu(void *arg1, void *arg2)
 	bool enable = arg1 != NULL;
 	uint64_t msr;
 
-	msr = rdmsr(MSR_VMCR);
-	if (msr & VMCR_SVMED) {
-		wrmsr(MSR_VMCR, msr & ~VMCR_SVMED);
+	msr = rdmsr(MSR_AMD_VM_CR);
+	if (msr & AMD_SVMDIS) {
+		wrmsr(MSR_AMD_VM_CR, msr & ~AMD_SVMDIS);
 	}
 
 	if (!enable) {
@@ -2519,7 +2526,7 @@ svm_change_cpu(void *arg1, void *arg2)
 	wrmsr(MSR_EFER, msr);
 
 	if (enable) {
-		wrmsr(MSR_VM_HSAVE_PA, hsave[cpu_index(curcpu())].pa);
+		wrmsr(MSR_VM_HSAVE_PA, hsave[cpu_number()].pa);
 	}
 }
 
@@ -2532,10 +2539,10 @@ svm_init(void)
 	u_int descs[4];
 	uint64_t xc;
 
-	x86_cpuid(0x8000000a, descs);
+	CPUID(0x8000000a, descs[0], descs[1], descs[2], descs[3]);
 
 	/* The guest TLB flush command. */
-	if (descs[3] & CPUID_AMD_SVM_FlushByASID) {
+	if (descs[3] & AMD_SVM_FLUSH_BY_ASID_CAP) {
 		svm_ctrl_tlb_flush = VMCB_CTRL_TLB_CTRL_FLUSH_GUEST;
 	} else {
 		svm_ctrl_tlb_flush = VMCB_CTRL_TLB_CTRL_FLUSH_ALL;
@@ -2545,19 +2552,19 @@ svm_init(void)
 	svm_init_asid(descs[1]);
 
 	/* Init the XCR0 mask. */
-	svm_xcr0_mask = SVM_XCR0_MASK_DEFAULT & x86_xsave_features;
+	svm_xcr0_mask = SVM_XCR0_MASK_DEFAULT & xsave_mask;
 
 	/* Init the max basic CPUID leaf. */
-	svm_cpuid_max_basic = uimin(cpuid_level, SVM_CPUID_MAX_BASIC);
+	svm_cpuid_max_basic = min(cpuid_level, SVM_CPUID_MAX_BASIC);
 
 	/* Init the max extended CPUID leaf. */
-	x86_cpuid(0x80000000, descs);
-	svm_cpuid_max_extended = uimin(descs[0], SVM_CPUID_MAX_EXTENDED);
+	CPUID(0x80000000, descs[0], descs[1], descs[2], descs[3]);
+	svm_cpuid_max_extended = min(descs[0], SVM_CPUID_MAX_EXTENDED);
 
 	memset(hsave, 0, sizeof(hsave));
-	for (CPU_INFO_FOREACH(cii, ci)) {
+	CPU_INFO_FOREACH(cii, ci) {
 		pg = uvm_pagealloc(NULL, 0, NULL, UVM_PGA_ZERO);
-		hsave[cpu_index(ci)].pa = VM_PAGE_TO_PHYS(pg);
+		hsave[ci->ci_cpuid].pa = VM_PAGE_TO_PHYS(pg);
 	}
 
 	xc = xc_broadcast(0, svm_change_cpu, (void *)true, NULL);
@@ -2570,9 +2577,7 @@ svm_fini_asid(void)
 	size_t allocsz;
 
 	allocsz = roundup(svm_maxasid, 8) / 8;
-	kmem_free(svm_asidmap, allocsz);
-
-	mutex_destroy(&svm_asidlock);
+	free(svm_asidmap, M_DEVBUF, allocsz);
 }
 
 static void
@@ -2599,7 +2604,7 @@ svm_capability(struct nvmm_capability *cap)
 	cap->arch.vcpu_conf_support =
 	    NVMM_CAP_ARCH_VCPU_CONF_CPUID;
 	cap->arch.xcr0_mask = svm_xcr0_mask;
-	cap->arch.mxcsr_mask = x86_fpu_mxcsr_mask;
+	cap->arch.mxcsr_mask = fpu_mxcsr_mask;
 	cap->arch.conf_cpuid_maxops = SVM_NCPUIDS;
 }
 

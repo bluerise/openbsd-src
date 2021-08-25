@@ -35,6 +35,34 @@
 
 #ifndef ASM_NVMM
 
+#if 1
+#define __read_mostly
+#define __cacheline_aligned
+
+/* __BIT(n): nth bit, where __BIT(0) == 0x1. */
+#define __BIT(__n)	\
+    (((uintmax_t)(__n) >= NBBY * sizeof(uintmax_t)) ? 0 : \
+    ((uintmax_t)1 << (uintmax_t)((__n) & (NBBY * sizeof(uintmax_t) - 1))))
+
+/* Macros for min/max. */
+#define __MIN(a,b)	((/*CONSTCOND*/(a)<=(b))?(a):(b))
+#define __MAX(a,b)	((/*CONSTCOND*/(a)>(b))?(a):(b))
+
+/* __BITS(m, n): bits m through n, m < n. */
+#define __BITS(__m, __n)	\
+	((__BIT(__MAX((__m), (__n)) + 1) - 1) ^ (__BIT(__MIN((__m), (__n))) - 1))
+
+/* find least significant bit that is set */
+#define __LOWEST_SET_BIT(__mask) ((((__mask) - 1) & (__mask)) ^ (__mask))
+
+#define __SHIFTOUT(__x, __mask) (((__x) & (__mask)) / __LOWEST_SET_BIT(__mask))
+#define __SHIFTIN(__x, __mask) ((__x) * __LOWEST_SET_BIT(__mask))
+#define __SHIFTOUT_MASK(__mask) __SHIFTOUT((__mask), (__mask))
+
+#define ilog2(x) ((sizeof(x) <= 4) ? (fls(x) - 1) : (flsl(x) - 1))
+#endif
+
+
 struct nvmm_x86_exit_memory {
 	int prot;
 	gpaddr_t gpa;

@@ -54,3 +54,4 @@ cdev_decl(pctr);
 
 #include "vmm.h"
 cdev_decl(vmm);
+cdev_decl(nvmm);

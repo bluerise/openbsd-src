@@ -190,13 +190,16 @@
 #define	SEFF0EBX_BMI1		0x00000008 /* advanced bit manipulation */
 #define	SEFF0EBX_HLE		0x00000010 /* Hardware Lock Elision */
 #define	SEFF0EBX_AVX2		0x00000020 /* Advanced Vector Extensions 2 */
+#define	SEFF0EBX_FDPEXONLY	0x00000040 /* x87FPU Data ptr updated only on x87exp */
 #define	SEFF0EBX_SMEP		0x00000080 /* Supervisor mode exec protection */
 #define	SEFF0EBX_BMI2		0x00000100 /* advanced bit manipulation */
 #define	SEFF0EBX_ERMS		0x00000200 /* Enhanced REP MOVSB/STOSB */
 #define	SEFF0EBX_INVPCID	0x00000400 /* INVPCID instruction */
 #define	SEFF0EBX_RTM		0x00000800 /* Restricted Transactional Memory */
 #define	SEFF0EBX_PQM		0x00001000 /* Quality of Service Monitoring */
+#define	SEFF0EBX_FPUCSDS	0x00002000 /* Deprecate FPU CS and FPU DS values */
 #define	SEFF0EBX_MPX		0x00004000 /* Memory Protection Extensions */
+#define	SEFF0EBX_PQE		0x00008000 /* Resource Director Technology Allocation */
 #define	SEFF0EBX_AVX512F	0x00010000 /* AVX-512 foundation inst */
 #define	SEFF0EBX_AVX512DQ	0x00020000 /* AVX-512 double/quadword */
 #define	SEFF0EBX_RDSEED		0x00040000 /* RDSEED instruction */
@@ -218,12 +221,20 @@
 #define SEFF0ECX_AVX512VBMI	0x00000002 /* AVX-512 vector bit inst */
 #define SEFF0ECX_UMIP		0x00000004 /* UMIP support */
 #define SEFF0ECX_PKU		0x00000008 /* Page prot keys for user mode */
+#define SEFF0ECX_GFNI		0x00000100
+#define SEFF0ECX_VAES		0x00000200
+#define SEFF0ECX_VPCLMULQDQ	0x00000400
+#define SEFF0ECX_CLDEMOTE	0x02000000 /* Cache line demote */
+#define SEFF0ECX_MOVDIRI	0x08000000 /* MOVDIRI instruction */
+#define SEFF0ECX_MOVDIR64B	0x10000000 /* MOVDIR64B instruction */
 /* SEFF EDX bits */
 #define SEFF0EDX_AVX512_4FNNIW	0x00000004 /* AVX-512 neural network insns */
 #define SEFF0EDX_AVX512_4FMAPS	0x00000008 /* AVX-512 mult accum single prec */
+#define SEFF0EDX_FSREP_MOV	0x00000010 /* Fast Short REP MOV */
 #define SEFF0EDX_SRBDS_CTRL	0x00000200 /* MCU_OPT_CTRL MSR */
 #define SEFF0EDX_MD_CLEAR	0x00000400 /* Microarch Data Clear */
 #define SEFF0EDX_TSXFA		0x00002000 /* TSX Forced Abort */
+#define SEFF0EDX_SERIALIZE	0x00004000 /* SERIALIZE instruction */
 #define SEFF0EDX_IBRS		0x04000000 /* IBRS / IBPB Speculation Control */
 #define SEFF0EDX_STIBP		0x08000000 /* STIBP Speculation Control */
 #define SEFF0EDX_L1DF		0x10000000 /* L1D_FLUSH */
@@ -272,6 +283,13 @@
 #define	CPUID_3DNOW2	0x40000000	/* 3DNow! Instruction Extension */
 #define	CPUID_3DNOW	0x80000000	/* 3DNow! Instructions */
 
+/* Intel Fn80000001 extended features - %edx */
+#define	CPUID_SYSCALL	0x00000800	/* SYSCALL/SYSRET */
+#define	CPUID_XD	0x00100000	/* Execute Disable (like CPUID_NOX) */
+#define	CPUID_PAGE1GB	0x04000000	/* 1GB Large Page Support */
+#define	CPUID_RDTSCP	0x08000000	/* Read TSC Pair Instruction */
+#define	CPUID_EM64T	0x20000000	/* Intel EM64T */
+
 #define	CPUIDECX_LAHF		0x00000001 /* LAHF and SAHF instructions */
 #define	CPUIDECX_CMPLEG		0x00000002 /* Core MP legacy mode */
 #define	CPUIDECX_SVM		0x00000004 /* Secure Virtual Machine */
@@ -310,6 +328,9 @@
 /*
  * AMD CPUID function 0x80000008 EBX bits
  */
+#define CPUIDEBX_CLZERO		(1ULL << 0)	/* CLZERO instruction */
+#define CPUIDEBX_XSAVEERPTR	(1ULL << 2)	/* RstrFpErrPtrs by XRSTOR */
+#define CPUIDEBX_WBNOINVD	(1ULL << 9)	/* WBNOINVD instruction */
 #define CPUIDEBX_IBPB		(1ULL << 12)	/* Speculation Control IBPB */
 #define CPUIDEBX_IBRS		(1ULL << 14)	/* Speculation Control IBRS */
 #define CPUIDEBX_STIBP		(1ULL << 15)	/* Speculation Control STIBP */

@@ -180,6 +180,8 @@
 #define	CPUIDECX_RDRAND	0x40000000	/* RDRAND instruction  */
 #define	CPUIDECX_HV	0x80000000	/* Running on hypervisor */
 
+#define CPUID_LOCAL_APIC_ID		(0xffU << 24)
+
 /*
  * "Structured Extended Feature Flags Parameters" (CPUID function 0x7, leaf 0)
  * EBX bits
@@ -318,6 +320,23 @@
 #define	CPUIDECX_PERFTSC	0x08000000 /* performance time-stamp counter */
 #define	CPUIDECX_PCTRL3		0x10000000 /* L3 performance counter ext */
 #define	CPUIDECX_MWAITX		0x20000000 /* MWAITX/MONITORX */
+
+/*
+ * Intel CPUID Extended Topology Enumeration Fn0000000b
+ * %ecx == level number
+ *      %eax: See below.
+ *      %ebx: Number of logical processors at this level.
+ *      %ecx: See below.
+ *      %edx: x2APIC ID of the current logical processor.
+ */
+/* %eax */
+#define CPUID_TOP_SHIFTNUM	(0x1f << 0) /* Topology ID shift value */
+/* %ecx */
+#define CPUID_TOP_LVLNUM	(0xff << 0) /* Level number */
+#define CPUID_TOP_LVLTYPE	(0xff << 8) /* Level type */
+#define CPUID_TOP_LVLTYPE_INVAL	0		/* Invalid */
+#define CPUID_TOP_LVLTYPE_SMT	1		/* SMT */
+#define CPUID_TOP_LVLTYPE_CORE	2		/* Core */
 
 /*
  * "Advanced Power Management Information" bits (CPUID function 0x80000007):
@@ -981,8 +1000,13 @@
 
 #define IA32_EPT_VPID_CAP_XO_TRANSLATIONS	(1ULL << 0)
 #define IA32_EPT_VPID_CAP_PAGE_WALK_4		(1ULL << 6)
+#define IA32_EPT_VPID_CAP_UC			(1ULL << 8)
 #define IA32_EPT_VPID_CAP_WB			(1ULL << 14)
+#define IA32_EPT_VPID_CAP_INVEPT		(1ULL << 20)
 #define IA32_EPT_VPID_CAP_AD_BITS		(1ULL << 21)
+#define IA32_EPT_VPID_CAP_INVEPT_CONTEXT	(1ULL << 25)
+#define IA32_EPT_VPID_CAP_INVVPID		(1ULL << 32)
+#define IA32_EPT_VPID_CAP_INVVPID_CONTEXT	(1ULL << 41)
 
 #define IA32_EPT_PAGING_CACHE_TYPE_UC	0x0
 #define IA32_EPT_PAGING_CACHE_TYPE_WB	0x6
@@ -990,6 +1014,11 @@
 #define IA32_EPT_PAGE_WALK_LENGTH	0x4
 
 /* VMX : IA32_VMX_BASIC bits */
+#define IA32_VMX_BASIC_IDENT				0x7fffffff
+#define IA32_VMX_MEM_TYPE				(0xfULL << 50)
+#define 	MEM_TYPE_UC					0
+#define 	MEM_TYPE_WB					6
+#define IA32_VMX_ID_REPORT_AVAIL			(1ULL << 54)
 #define IA32_VMX_TRUE_CTLS_AVAIL			(1ULL << 55)
 
 /* VMX : IA32_VMX_PINBASED_CTLS bits */
@@ -1115,6 +1144,13 @@
 #define VMCS_POSTED_INTERRUPT_DESC	0x2016
 #define VMCS_VM_FUNCTION_CONTROLS	0x2018
 #define VMCS_GUEST_IA32_EPTP		0x201A
+#define 	EPTP_TYPE			(0x7 << 0)
+#define 		EPTP_TYPE_UC		0
+#define 		EPTP_TYPE_WB		6
+#define 	EPTP_WALKLEN			(0x7 << 3)
+#define 	EPTP_FLAGS_AD			(1 << 6)
+#define 	EPTP_SSS			(1 << 7)
+#define 	EPTP_PHYSADDR			(0xfffffffffffffLLU << 12)
 #define VMCS_EOI_EXIT_BITMAP_0		0x201C
 #define VMCS_EOI_EXIT_BITMAP_1		0x201E
 #define VMCS_EOI_EXIT_BITMAP_2		0x2020
@@ -1160,6 +1196,17 @@
 #define VMCS_ENTRY_CTLS			0x4012
 #define VMCS_ENTRY_MSR_LOAD_COUNT	0x4014
 #define VMCS_ENTRY_INTERRUPTION_INFO	0x4016
+#define 	INTR_INFO_VECTOR		(0xff << 0)
+#define 	INTR_INFO_TYPE			(0x3 << 8)
+#define 		INTR_TYPE_EXT_INT	0
+#define 		INTR_TYPE_NMI		2
+#define 		INTR_TYPE_HW_EXC	3
+#define 		INTR_TYPE_SW_INT	4
+#define 		INTR_TYPE_PRIV_SW_EXC	5
+#define 		INTR_TYPE_SW_EXC	6
+#define 		INTR_TYPE_OTHER		7
+#define 	INTR_INFO_ERROR			(1U << 11)
+#define 	INTR_INFO_VALID			(1U << 31)
 #define VMCS_ENTRY_EXCEPTION_ERROR_CODE	0x4018
 #define VMCS_ENTRY_INSTRUCTION_LENGTH	0x401A
 #define VMCS_TPR_THRESHOLD		0x401C
@@ -1197,6 +1244,11 @@
 #define VMCS_GUEST_IA32_LDTR_AR		0x4820
 #define VMCS_GUEST_IA32_TR_AR		0x4822
 #define VMCS_GUEST_INTERRUPTIBILITY_ST	0x4824
+#define 	INT_STATE_STI			(1 << 0)
+#define 	INT_STATE_MOVSS			(1 << 1)
+#define 	INT_STATE_SMI			(1 << 2)
+#define 	INT_STATE_NMI			(1 << 3)
+#define 	INT_STATE_ENCLAVE		(1 << 4)
 #define VMCS_GUEST_ACTIVITY_STATE	0x4826
 #define VMCS_GUEST_SMBASE		0x4828
 #define VMCS_GUEST_IA32_SYSENTER_CS	0x482A

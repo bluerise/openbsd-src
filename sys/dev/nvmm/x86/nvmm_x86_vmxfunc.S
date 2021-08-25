@@ -33,11 +33,10 @@
 #define ALIGN_TEXT	.align 16,0x90
 #define _ALIGN_TEXT	ALIGN_TEXT
 
-#define _LOCORE
 #include "assym.h"
 #include <machine/asm.h>
 #include <machine/segments.h>
-#include <x86/specialreg.h>
+#include <machine/specialreg.h>
 
 #define ASM_NVMM
 #include <dev/nvmm/x86/nvmm_x86.h>

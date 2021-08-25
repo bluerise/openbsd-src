@@ -120,6 +120,12 @@ rcr0(void)
 	return val;
 }
 
+static __inline void
+lcr2(u_int64_t val)
+{
+	__asm volatile("movq %0,%%cr2" : : "r" (val));
+}
+
 static __inline u_int64_t
 rcr2(void)
 {

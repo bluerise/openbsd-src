@@ -4,7 +4,7 @@
 SUBDIR=	csu libagentx libarch libc libcbor libcrypto libcurses \
 	libedit libelf libevent libexpat \
 	libfido2 libform libfuse libkeynote libkvm libl libm libmenu \
-	libossaudio libpanel libpcap libradius librthread \
+	libnvmm libossaudio libpanel libpcap libradius librthread \
 	librpcsvc libskey libsndio libssl libtls libusbhid \
 	libutil liby libz
 

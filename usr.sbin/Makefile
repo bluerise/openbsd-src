@@ -10,7 +10,7 @@ SUBDIR=	ac accton acme-client acpidump adduser amd apm apmd arp \
 	kgmon kvm_mkdb ldapd ldapctl ldomctl ldomd ldpd ldpctl lpr makefs \
 	mailwrapper map-mbone memconfig mksuncd mkuboot mopd mrinfo \
 	mrouted mtrace mtree ndp netgroup_mkdb \
-	npppctl npppd nsd ntpd ocspcheck ospfctl ospfd ospf6d ospf6ctl \
+	npppctl npppd nsd ntpd nvmmctl ocspcheck ospfctl ospfd ospf6d ospf6ctl \
 	pcidump pkg_add portmap pppd procmap pstat pwd_mkdb \
 	quot quotaon ractl rad radiusctl radiusd rarpd rbootd \
 	rcctl rdate rdsetroot relayctl relayd repquota ripctl ripd \

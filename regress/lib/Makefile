@@ -8,6 +8,7 @@ SUBDIR+=	libevent
 SUBDIR+=	libexpat
 SUBDIR+=	libfuse
 SUBDIR+=	libm
+SUBDIR+=	libnvmm
 SUBDIR+=	libpthread
 SUBDIR+=	libradius
 SUBDIR+=	libskey

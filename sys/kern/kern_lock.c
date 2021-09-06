@@ -289,6 +289,7 @@ mtx_enter(struct mutex *mtx)
 	}
 	spc->spc_spinning--;
 
+	membar_enter_after_atomic();
 	mtx->mtx_owner = curcpu();
 	if (mtx->mtx_wantipl != IPL_NONE)
 		mtx->mtx_oldipl = s;

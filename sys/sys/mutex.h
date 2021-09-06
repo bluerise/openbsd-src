@@ -43,8 +43,8 @@ struct mutex {
 	volatile void *mtx_owner;
 	int mtx_wantipl;
 	int mtx_oldipl;
-	int mtx_ticket;
-	int mtx_cur;
+	volatile u_int mtx_ticket;
+	u_int mtx_users;
 #ifdef WITNESS
 	struct lock_object mtx_lock_obj;
 #endif

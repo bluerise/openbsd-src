@@ -248,8 +248,8 @@ __mtx_init(struct mutex *mtx, int wantipl)
 	mtx->mtx_owner = NULL;
 	mtx->mtx_wantipl = wantipl;
 	mtx->mtx_oldipl = IPL_NONE;
-	mtx->mtx_ticket = 0;
-	mtx->mtx_cur = 0;
+	mtx->mtx_users = 0;
+	mtx->mtx_ticket = 1;
 }
 
 #ifdef MULTIPROCESSOR
@@ -258,10 +258,10 @@ mtx_enter(struct mutex *mtx)
 {
 	struct schedstate_percpu *spc = &curcpu()->ci_schedstate;
 	struct cpu_info *ci = curcpu();
-	unsigned int t;
 #ifdef MP_LOCKDEBUG
 	int nticks = __mp_lock_spinout;
 #endif
+	u_int t;
 	int s;
 
 	/* Avoid deadlocks after panic or in DDB */
@@ -275,8 +275,8 @@ mtx_enter(struct mutex *mtx)
 		s = splraise(mtx->mtx_wantipl);
 
 	spc->spc_spinning++;
-	t = atomic_inc_int_nv(&mtx->mtx_ticket) - 1;
-	while (READ_ONCE(mtx->mtx_cur) != t) {
+	t = atomic_inc_int_nv(&mtx->mtx_users);
+	while (READ_ONCE(mtx->mtx_ticket) != t) {
 		CPU_BUSY_CYCLE();
 
 #ifdef MP_LOCKDEBUG
@@ -302,7 +302,7 @@ int
 mtx_enter_try(struct mutex *mtx)
 {
 	struct cpu_info *ci = curcpu();
-	unsigned int t;
+	u_int t;
 	int s;
 
 	/* Avoid deadlocks after panic or in DDB */
@@ -317,8 +317,8 @@ mtx_enter_try(struct mutex *mtx)
 		panic("mtx %p: locking against myself", mtx);
 #endif
 
-	t = READ_ONCE(mtx->mtx_cur);
-	if (atomic_cas_uint(&mtx->mtx_ticket, t, t + 1) == t) {
+	t = READ_ONCE(mtx->mtx_ticket) - 1;
+	if (atomic_cas_uint(&mtx->mtx_users, t, t + 1) == t) {
 		membar_enter_after_atomic();
 		mtx->mtx_owner = curcpu();
 		if (mtx->mtx_wantipl != IPL_NONE)
@@ -394,7 +394,7 @@ mtx_leave(struct mutex *mtx)
 #endif
 	mtx->mtx_owner = NULL;
 #ifdef MULTIPROCESSOR
-	atomic_inc_int_nv(&mtx->mtx_cur);
+	atomic_inc_int(&mtx->mtx_ticket);
 #endif
 	if (mtx->mtx_wantipl != IPL_NONE)
 		splx(s);

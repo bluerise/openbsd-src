@@ -276,7 +276,7 @@ mtx_enter(struct mutex *mtx)
 
 	spc->spc_spinning++;
 	t = atomic_inc_int_nv(&mtx->mtx_users);
-	while (READ_ONCE(mtx->mtx_ticket) != t) {
+	while (mtx->mtx_ticket != t) {
 		CPU_BUSY_CYCLE();
 
 #ifdef MP_LOCKDEBUG
@@ -317,7 +317,7 @@ mtx_enter_try(struct mutex *mtx)
 		panic("mtx %p: locking against myself", mtx);
 #endif
 
-	t = READ_ONCE(mtx->mtx_ticket) - 1;
+	t = mtx->mtx_ticket - 1;
 	if (atomic_cas_uint(&mtx->mtx_users, t, t + 1) == t) {
 		membar_enter_after_atomic();
 		mtx->mtx_owner = curcpu();
@@ -394,7 +394,7 @@ mtx_leave(struct mutex *mtx)
 #endif
 	mtx->mtx_owner = NULL;
 #ifdef MULTIPROCESSOR
-	atomic_inc_int(&mtx->mtx_ticket);
+	mtx->mtx_ticket++;
 #endif
 	if (mtx->mtx_wantipl != IPL_NONE)
 		splx(s);

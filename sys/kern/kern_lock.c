@@ -248,6 +248,8 @@ __mtx_init(struct mutex *mtx, int wantipl)
 	mtx->mtx_owner = NULL;
 	mtx->mtx_wantipl = wantipl;
 	mtx->mtx_oldipl = IPL_NONE;
+	mtx->mtx_ticket = 0;
+	mtx->mtx_cur = 0;
 }
 
 #ifdef MULTIPROCESSOR
@@ -255,15 +257,26 @@ void
 mtx_enter(struct mutex *mtx)
 {
 	struct schedstate_percpu *spc = &curcpu()->ci_schedstate;
+	struct cpu_info *ci = curcpu();
+	unsigned int t;
 #ifdef MP_LOCKDEBUG
 	int nticks = __mp_lock_spinout;
 #endif
+	int s;
+
+	/* Avoid deadlocks after panic or in DDB */
+	if (panicstr || db_active)
+		return;
 
 	WITNESS_CHECKORDER(MUTEX_LOCK_OBJECT(mtx),
 	    LOP_EXCLUSIVE | LOP_NEWORDER, NULL);
 
+	if (mtx->mtx_wantipl != IPL_NONE)
+		s = splraise(mtx->mtx_wantipl);
+
 	spc->spc_spinning++;
-	while (mtx_enter_try(mtx) == 0) {
+	t = atomic_inc_int_nv(&mtx->mtx_ticket) - 1;
+	while (READ_ONCE(mtx->mtx_cur) != t) {
 		CPU_BUSY_CYCLE();
 
 #ifdef MP_LOCKDEBUG
@@ -275,12 +288,21 @@ mtx_enter(struct mutex *mtx)
 #endif
 	}
 	spc->spc_spinning--;
+
+	mtx->mtx_owner = curcpu();
+	if (mtx->mtx_wantipl != IPL_NONE)
+		mtx->mtx_oldipl = s;
+#ifdef DIAGNOSTIC
+	ci->ci_mutex_level++;
+#endif
+	WITNESS_LOCK(MUTEX_LOCK_OBJECT(mtx), LOP_EXCLUSIVE);
 }
 
 int
 mtx_enter_try(struct mutex *mtx)
 {
-	struct cpu_info *owner, *ci = curcpu();
+	struct cpu_info *ci = curcpu();
+	unsigned int t;
 	int s;
 
 	/* Avoid deadlocks after panic or in DDB */
@@ -290,13 +312,15 @@ mtx_enter_try(struct mutex *mtx)
 	if (mtx->mtx_wantipl != IPL_NONE)
 		s = splraise(mtx->mtx_wantipl);
 
-	owner = atomic_cas_ptr(&mtx->mtx_owner, NULL, ci);
 #ifdef DIAGNOSTIC
-	if (__predict_false(owner == ci))
+	if (__predict_false(mtx->mtx_owner == ci))
 		panic("mtx %p: locking against myself", mtx);
 #endif
-	if (owner == NULL) {
+
+	t = READ_ONCE(mtx->mtx_cur);
+	if (atomic_cas_uint(&mtx->mtx_ticket, t, t + 1) == t) {
 		membar_enter_after_atomic();
+		mtx->mtx_owner = curcpu();
 		if (mtx->mtx_wantipl != IPL_NONE)
 			mtx->mtx_oldipl = s;
 #ifdef DIAGNOSTIC
@@ -369,6 +393,9 @@ mtx_leave(struct mutex *mtx)
 	membar_exit();
 #endif
 	mtx->mtx_owner = NULL;
+#ifdef MULTIPROCESSOR
+	atomic_inc_int_nv(&mtx->mtx_cur);
+#endif
 	if (mtx->mtx_wantipl != IPL_NONE)
 		splx(s);
 }

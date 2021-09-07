@@ -257,9 +257,7 @@ void
 mtx_enter(struct mutex *mtx)
 {
 	struct schedstate_percpu *spc = &curcpu()->ci_schedstate;
-#ifdef DIAGNOSTIC
 	struct cpu_info *ci = curcpu();
-#endif
 #ifdef MP_LOCKDEBUG
 	int nticks = __mp_lock_spinout;
 #endif
@@ -292,7 +290,7 @@ mtx_enter(struct mutex *mtx)
 	spc->spc_spinning--;
 
 	membar_enter_after_atomic();
-	mtx->mtx_owner = curcpu();
+	mtx->mtx_owner = ci;
 	if (mtx->mtx_wantipl != IPL_NONE)
 		mtx->mtx_oldipl = s;
 #ifdef DIAGNOSTIC
@@ -304,9 +302,7 @@ mtx_enter(struct mutex *mtx)
 int
 mtx_enter_try(struct mutex *mtx)
 {
-#ifdef DIAGNOSTIC
 	struct cpu_info *ci = curcpu();
-#endif
 	u_int t;
 	int s;
 
@@ -325,7 +321,7 @@ mtx_enter_try(struct mutex *mtx)
 	t = mtx->mtx_ticket - 1;
 	if (atomic_cas_uint(&mtx->mtx_users, t, t + 1) == t) {
 		membar_enter_after_atomic();
-		mtx->mtx_owner = curcpu();
+		mtx->mtx_owner = ci;
 		if (mtx->mtx_wantipl != IPL_NONE)
 			mtx->mtx_oldipl = s;
 #ifdef DIAGNOSTIC

@@ -66,10 +66,10 @@ struct mutex {
 
 #ifdef WITNESS
 #define MUTEX_INITIALIZER_FLAGS(ipl, name, flags) \
-	{ NULL, __MUTEX_IPL((ipl)), IPL_NONE, MTX_LO_INITIALIZER(name, flags) }
+	{ NULL, __MUTEX_IPL((ipl)), IPL_NONE, 1, 0, MTX_LO_INITIALIZER(name, flags) }
 #else
 #define MUTEX_INITIALIZER_FLAGS(ipl, name, flags) \
-	{ NULL, __MUTEX_IPL((ipl)), IPL_NONE }
+	{ NULL, __MUTEX_IPL((ipl)), IPL_NONE, 1, 0 }
 #endif
 
 void __mtx_init(struct mutex *, int);

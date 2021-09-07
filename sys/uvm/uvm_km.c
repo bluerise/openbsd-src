@@ -635,7 +635,7 @@ uvm_km_page_lateinit(void)
  * not zero filled.
  */
 
-struct uvm_km_pages uvm_km_pages;
+struct uvm_km_pages uvm_km_pages = { .mtx = MUTEX_INITIALIZER(IPL_VM) };
 
 void uvm_km_createthread(void *);
 void uvm_km_thread(void *);
@@ -655,7 +655,6 @@ uvm_km_page_init(void)
 	int	len, bulk;
 	vaddr_t	addr;
 
-	mtx_init(&uvm_km_pages.mtx, IPL_VM);
 	if (!uvm_km_pages.lowat) {
 		/* based on physmem, calculate a good value here */
 		uvm_km_pages.lowat = physmem / 256;

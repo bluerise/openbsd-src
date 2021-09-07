@@ -1288,10 +1288,12 @@ pmap_bootstrap(long kvo, paddr_t lpt1, long kernelstart, long kernelend,
 	pmap_kernel()->pm_vp.l1 = (struct pmapvp1 *)va;
 	pmap_kernel()->pm_privileged = 1;
 	pmap_kernel()->pm_asid = 0;
+	mtx_init(&pmap_kernel()->pm_mtx, IPL_VM);
 
 	pmap_tramp.pm_vp.l1 = (struct pmapvp1 *)va + 1;
 	pmap_tramp.pm_privileged = 1;
 	pmap_tramp.pm_asid = 0;
+	mtx_init(&pmap_tramp.pm_mtx, IPL_VM);
 
 	/* Mark ASID 0 as in-use. */
 	pmap_asid[0] |= (3U << 0);

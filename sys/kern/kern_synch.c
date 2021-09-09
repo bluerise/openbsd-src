@@ -66,6 +66,7 @@
 #endif
 
 int	sleep_signal_check(void);
+int	sleep_signal_check_locked(int s);
 int	thrsleep(struct proc *, struct sys___thrsleep_args *);
 int	thrsleep_unlock(void *);
 
@@ -410,7 +411,7 @@ sleep_finish(struct sleep_state *sls, int do_sleep)
 		 * that case we need to unwind immediately.
 		 */
 		atomic_setbits_int(&p->p_flag, P_SINTR);
-		if ((error = sleep_signal_check()) != 0) {
+		if ((error = sleep_signal_check_locked(sls->sls_s)) != 0) {
 			p->p_stat = SONPROC;
 			sls->sls_catch = 0;
 			do_sleep = 0;
@@ -474,10 +475,22 @@ sleep_finish(struct sleep_state *sls, int do_sleep)
 int
 sleep_signal_check(void)
 {
+	int err, s;
+
+	SCHED_LOCK(s);
+	err = sleep_signal_check_locked(s);
+	SCHED_UNLOCK(s);
+
+	return err;
+}
+
+int
+sleep_signal_check_locked(int s)
+{
 	struct proc *p = curproc;
 	int err, sig;
 
-	if ((err = single_thread_check(p, 1)) != 0)
+	if ((err = single_thread_check_locked(p, 1, s)) != 0)
 		return err;
 	if ((sig = cursig(p)) != 0) {
 		if (p->p_p->ps_sigacts->ps_sigintr & sigmask(sig))

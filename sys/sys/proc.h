@@ -606,6 +606,7 @@ int	single_thread_set(struct proc *, enum single_thread_mode, int);
 int	single_thread_wait(struct process *, int);
 void	single_thread_clear(struct proc *, int);
 int	single_thread_check(struct proc *, int);
+int	single_thread_check_locked(struct proc *, int, int);
 
 void	child_return(void *);
 

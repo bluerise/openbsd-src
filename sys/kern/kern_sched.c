@@ -341,7 +341,7 @@ again:
 			 * This is kind of like a stupid idle loop.
 			 */
 #ifdef MULTIPROCESSOR
-			__mp_unlock(&sched_lock);
+			mtx_leave(&sched_lock);
 #endif
 			spl0();
 			delay(10);

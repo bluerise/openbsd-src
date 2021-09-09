@@ -97,9 +97,6 @@ ___mp_lock_init(struct __mp_lock *mpl, const struct lock_type *type)
 	if (mpl == &kernel_lock)
 		mpl->mpl_lock_obj.lo_flags = LO_WITNESS | LO_INITIALIZED |
 		    LO_SLEEPABLE | (LO_CLASS_KERNEL_LOCK << LO_CLASSSHIFT);
-	else if (mpl == &sched_lock)
-		mpl->mpl_lock_obj.lo_flags = LO_WITNESS | LO_INITIALIZED |
-		    LO_RECURSABLE | (LO_CLASS_SCHED_LOCK << LO_CLASSSHIFT);
 	WITNESS_INIT(&mpl->mpl_lock_obj, type);
 #endif
 }

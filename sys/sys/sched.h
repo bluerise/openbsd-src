@@ -195,37 +195,32 @@ void remrunqueue(struct proc *);
 } while (0)
 
 #if defined(MULTIPROCESSOR)
-#include <sys/lock.h>
+#include <sys/mutex.h>
 
-/*
- * XXX Instead of using struct lock for the kernel lock and thus requiring us
- * XXX to implement simplelocks, causing all sorts of fine-grained locks all
- * XXX over our tree to be activated, the sched_lock is a different kind of
- * XXX lock to avoid introducing locking protocol bugs.
- */
-extern struct __mp_lock sched_lock;
+extern struct mutex sched_lock;
 
 #define	SCHED_ASSERT_LOCKED()						\
 do {									\
 	splassert(IPL_SCHED);						\
-	KASSERT(__mp_lock_held(&sched_lock, curcpu()));			\
-} while (0)
-#define	SCHED_ASSERT_UNLOCKED()						\
-do {									\
-	KASSERT(__mp_lock_held(&sched_lock, curcpu()) == 0);		\
+	MUTEX_ASSERT_LOCKED(&sched_lock);				\
 } while (0)
 
-#define	SCHED_LOCK_INIT()	__mp_lock_init(&sched_lock)
+#define	SCHED_ASSERT_UNLOCKED()						\
+do {									\
+	MUTEX_ASSERT_UNLOCKED(&sched_lock);				\
+} while (0)
+
+#define	SCHED_LOCK_INIT()	mtx_init(&sched_lock, IPL_NONE)
 
 #define	SCHED_LOCK(s)							\
 do {									\
 	s = splsched();							\
-	__mp_lock(&sched_lock);						\
+	mtx_enter(&sched_lock);						\
 } while (/* CONSTCOND */ 0)
 
 #define	SCHED_UNLOCK(s)							\
 do {									\
-	__mp_unlock(&sched_lock);					\
+	mtx_leave(&sched_lock);						\
 	splx(s);							\
 } while (/* CONSTCOND */ 0)
 

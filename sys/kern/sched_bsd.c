@@ -59,7 +59,7 @@ int	lbolt;			/* once a second sleep address */
 int	rrticks_init;		/* # of hardclock ticks per roundrobin() */
 
 #ifdef MULTIPROCESSOR
-struct __mp_lock sched_lock;
+struct mutex sched_lock;
 #endif
 
 void			schedcpu(void *);
@@ -320,10 +320,8 @@ mi_switch(void)
 	struct timespec ts;
 #ifdef MULTIPROCESSOR
 	int hold_count;
-	int sched_count;
 #endif
 
-	assertwaitok();
 	KASSERT(p->p_stat != SONPROC);
 
 	SCHED_ASSERT_LOCKED();
@@ -332,7 +330,6 @@ mi_switch(void)
 	/*
 	 * Release the kernel_lock, as we are about to yield the CPU.
 	 */
-	sched_count = __mp_release_all_but_one(&sched_lock);
 	if (_kernel_lock_held())
 		hold_count = __mp_release_all(&kernel_lock);
 	else
@@ -390,9 +387,10 @@ mi_switch(void)
 	 * just release it here.
 	 */
 #ifdef MULTIPROCESSOR
-	__mp_unlock(&sched_lock);
+	mtx_leave(&sched_lock);
 #endif
 
+	assertwaitok();
 	SCHED_ASSERT_UNLOCKED();
 
 	smr_idle();
@@ -414,7 +412,7 @@ mi_switch(void)
 	 */
 	if (hold_count)
 		__mp_acquire_count(&kernel_lock, hold_count);
-	__mp_acquire_count(&sched_lock, sched_count + 1);
+	mtx_enter(&sched_lock);
 #endif
 }
 

@@ -308,7 +308,7 @@ rwsleep(const volatile void *ident, struct rwlock *rwl, int priority,
 
 	sleep_setup(&sls, ident, priority, wmesg, timo);
 
-	rw_exit(rwl);
+	_rw_exit(rwl, 1);
 	/* signal may stop the process, release rwlock before that */
 	error = sleep_finish(&sls, 1);
 
@@ -489,11 +489,12 @@ sleep_signal_check(void)
 }
 
 int
-wakeup_proc(struct proc *p, const volatile void *chan)
+_wakeup_proc_locked(struct proc *p, const volatile void *chan)
 {
-	int s, awakened = 0;
+	int awakened = 0;
 
-	SCHED_LOCK(s);
+	SCHED_ASSERT_LOCKED();
+
 	if (p->p_wchan != NULL &&
 	   ((chan == NULL) || (p->p_wchan == chan))) {
 		awakened = 1;
@@ -502,6 +503,17 @@ wakeup_proc(struct proc *p, const volatile void *chan)
 		else
 			unsleep(p);
 	}
+
+	return awakened;
+}
+
+int
+wakeup_proc(struct proc *p, const volatile void *chan)
+{
+	int s, awakened;
+
+	SCHED_LOCK(s);
+	awakened = _wakeup_proc_locked(p, chan);
 	SCHED_UNLOCK(s);
 
 	return awakened;
@@ -521,7 +533,7 @@ endtsleep(void *arg)
 	int s;
 
 	SCHED_LOCK(s);
-	if (wakeup_proc(p, NULL))
+	if (_wakeup_proc_locked(p, NULL))
 		atomic_setbits_int(&p->p_flag, P_TIMEOUT);
 	SCHED_UNLOCK(s);
 }
@@ -546,14 +558,18 @@ unsleep(struct proc *p)
  * Make a number of processes sleeping on the specified identifier runnable.
  */
 void
-wakeup_n(const volatile void *ident, int n)
+wakeup_n(const volatile void *ident, int n, int locked)
 {
 	struct slpque *qp;
 	struct proc *p;
 	struct proc *pnext;
 	int s;
 
-	SCHED_LOCK(s);
+	if (!locked)
+		SCHED_LOCK(s);
+	else
+		SCHED_ASSERT_LOCKED();
+
 	qp = &slpque[LOOKUP(ident)];
 	for (p = TAILQ_FIRST(qp); p != NULL && n != 0; p = pnext) {
 		pnext = TAILQ_NEXT(p, p_runq);
@@ -567,10 +583,12 @@ wakeup_n(const volatile void *ident, int n)
 		if (p->p_stat != SSLEEP && p->p_stat != SSTOP)
 			panic("wakeup: p_stat is %d", (int)p->p_stat);
 #endif
-		if (wakeup_proc(p, ident))
+		if (_wakeup_proc_locked(p, ident))
 			--n;
 	}
-	SCHED_UNLOCK(s);
+
+	if (!locked)
+		SCHED_UNLOCK(s);
 }
 
 /*
@@ -579,7 +597,7 @@ wakeup_n(const volatile void *ident, int n)
 void
 wakeup(const volatile void *chan)
 {
-	wakeup_n(chan, -1);
+	wakeup_n(chan, -1, 0);
 }
 
 int

@@ -40,15 +40,6 @@
  *  atomically test for the lock being 0 (it's not possible to have
  *  owner/read count unset and waiter bits set) and if 0 set the owner to
  *  the proc and RWLOCK_WRLOCK. While not zero, loop into rw_enter_wait.
- *
- * void rw_exit_read(struct rwlock *);
- *  atomically decrement lock by RWLOCK_READ_INCR and unset RWLOCK_WAIT and
- *  RWLOCK_WRWANT remembering the old value of lock and if RWLOCK_WAIT was set,
- *  call rw_exit_waiters with the old contents of the lock.
- *
- * void rw_exit_write(struct rwlock *);
- *  atomically swap the contents of the lock with 0 and if RWLOCK_WAIT was
- *  set, call rw_exit_waiters with the old contents of the lock.
  */
 
 #ifndef _SYS_RWLOCK_H
@@ -149,8 +140,8 @@ void	_rw_init_flags(struct rwlock *, const char *, int,
 
 void	rw_enter_read(struct rwlock *);
 void	rw_enter_write(struct rwlock *);
-void	rw_exit_read(struct rwlock *);
-void	rw_exit_write(struct rwlock *);
+#define rw_exit_read(rwl)	rw_exit(rwl)
+#define rw_exit_write(rwl)	rw_exit(rwl)
 
 #ifdef DIAGNOSTIC
 void	rw_assert_wrlock(struct rwlock *);
@@ -167,6 +158,7 @@ void	rw_assert_unlocked(struct rwlock *);
 int	rw_enter(struct rwlock *, int);
 void	rw_exit(struct rwlock *);
 int	rw_status(struct rwlock *);
+void	_rw_exit(struct rwlock *, int);
 
 static inline int
 rw_read_held(struct rwlock *rwl)

@@ -1973,7 +1973,7 @@ single_thread_check_locked(struct proc *p, int deep, int s)
 				continue;
 
 			if (atomic_dec_int_nv(&pr->ps_singlecount) == 0)
-				wakeup(&pr->ps_singlecount);
+				wakeup_n(&pr->ps_singlecount, 1, 1);
 
 			if (pr->ps_flags & PS_SINGLEEXIT) {
 				SCHED_UNLOCK(s);

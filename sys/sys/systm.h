@@ -265,9 +265,9 @@ void	cond_signal(struct cond *);
 
 struct mutex;
 struct rwlock;
-void    wakeup_n(const volatile void *, int);
+void    wakeup_n(const volatile void *, int, int);
 void    wakeup(const volatile void *);
-#define wakeup_one(c) wakeup_n((c), 1)
+#define wakeup_one(c) wakeup_n((c), 1, 0)
 int	tsleep(const volatile void *, int, const char *, int);
 int	tsleep_nsec(const volatile void *, int, const char *, uint64_t);
 int	msleep(const volatile void *, struct mutex *, int,  const char*, int);

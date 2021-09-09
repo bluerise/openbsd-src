@@ -671,7 +671,7 @@ void
 proc_trampoline_mp(void)
 {
 	SCHED_ASSERT_LOCKED();
-	__mp_unlock(&sched_lock);
+	mtx_leave(&sched_lock);
 	spl0();
 	SCHED_ASSERT_UNLOCKED();
 	KERNEL_ASSERT_UNLOCKED();

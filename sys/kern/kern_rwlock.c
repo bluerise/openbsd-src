@@ -129,36 +129,6 @@ rw_enter_write(struct rwlock *rwl)
 	}
 }
 
-void
-rw_exit_read(struct rwlock *rwl)
-{
-	unsigned long owner;
-
-	rw_assert_rdlock(rwl);
-	WITNESS_UNLOCK(&rwl->rwl_lock_obj, 0);
-
-	membar_exit_before_atomic();
-	owner = rwl->rwl_owner;
-	if (__predict_false((owner & RWLOCK_WAIT) ||
-	    rw_cas(&rwl->rwl_owner, owner, owner - RWLOCK_READ_INCR)))
-		rw_do_exit(rwl, 0);
-}
-
-void
-rw_exit_write(struct rwlock *rwl)
-{
-	unsigned long owner;
-
-	rw_assert_wrlock(rwl);
-	WITNESS_UNLOCK(&rwl->rwl_lock_obj, LOP_EXCLUSIVE);
-
-	membar_exit_before_atomic();
-	owner = rwl->rwl_owner;
-	if (__predict_false((owner & RWLOCK_WAIT) ||
-	    rw_cas(&rwl->rwl_owner, owner, 0)))
-		rw_do_exit(rwl, RWLOCK_WRLOCK);
-}
-
 #ifdef DIAGNOSTIC
 /*
  * Put the diagnostic functions here to keep the main code free
@@ -313,9 +283,10 @@ retry:
 }
 
 void
-rw_exit(struct rwlock *rwl)
+_rw_exit(struct rwlock *rwl, int locked)
 {
 	unsigned long wrlock;
+	unsigned long owner, set;
 
 	/* Avoid deadlocks after panic or in DDB */
 	if (panicstr || db_active)
@@ -329,15 +300,6 @@ rw_exit(struct rwlock *rwl)
 	WITNESS_UNLOCK(&rwl->rwl_lock_obj, wrlock ? LOP_EXCLUSIVE : 0);
 
 	membar_exit_before_atomic();
-	rw_do_exit(rwl, wrlock);
-}
-
-/* membar_exit_before_atomic() has to precede call of this function. */
-void
-rw_do_exit(struct rwlock *rwl, unsigned long wrlock)
-{
-	unsigned long owner, set;
-
 	do {
 		owner = rwl->rwl_owner;
 		if (wrlock)
@@ -348,7 +310,13 @@ rw_do_exit(struct rwlock *rwl, unsigned long wrlock)
 	} while (__predict_false(rw_cas(&rwl->rwl_owner, owner, set)));
 
 	if (owner & RWLOCK_WAIT)
-		wakeup(rwl);
+		wakeup_n(rwl, -1, locked);
+}
+
+void
+rw_exit(struct rwlock *rwl)
+{
+	_rw_exit(rwl, 0);
 }
 
 int

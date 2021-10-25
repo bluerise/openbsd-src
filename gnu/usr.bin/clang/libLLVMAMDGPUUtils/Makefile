@@ -6,9 +6,10 @@ NOPROFILE=
 CPPFLAGS+=	-I${.OBJDIR}/../include/llvm/AMDGPU \
 		-I${LLVM_SRCS}/lib/Target/AMDGPU
 
-SRCS+=	AMDGPUBaseInfo.cpp \
-	AMDKernelCodeTUtils.cpp \
-	AMDGPUAsmUtils.cpp \
-	AMDGPUPALMetadata.cpp
+SRCS+=	AMDGPUAsmUtils.cpp \
+	AMDGPUBaseInfo.cpp \
+	AMDGPULDSUtils.cpp \
+	AMDGPUPALMetadata.cpp \
+	AMDKernelCodeTUtils.cpp
 
 .PATH:	${.CURDIR}/../../../llvm/llvm/lib/Target/AMDGPU/Utils

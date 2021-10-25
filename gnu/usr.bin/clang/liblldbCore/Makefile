@@ -9,9 +9,9 @@ SRCS=	Address.cpp \
 	AddressRange.cpp \
 	AddressResolver.cpp \
 	AddressResolverFileLine.cpp \
-	AddressResolverName.cpp \
 	Communication.cpp \
 	Debugger.cpp \
+	Declaration.cpp \
 	Disassembler.cpp \
 	DumpDataExtractor.cpp \
 	DumpRegisterValue.cpp \
@@ -29,9 +29,11 @@ SRCS=	Address.cpp \
 	ModuleList.cpp \
 	Opcode.cpp \
 	PluginManager.cpp \
+	Progress.cpp \
 	RichManglingContext.cpp \
 	SearchFilter.cpp \
 	Section.cpp \
+	SourceLocationSpec.cpp \
 	SourceManager.cpp \
 	StreamAsynchronousIO.cpp \
 	StreamFile.cpp \
@@ -49,6 +51,7 @@ SRCS=	Address.cpp \
 	ValueObjectMemory.cpp \
 	ValueObjectRegister.cpp \
 	ValueObjectSyntheticFilter.cpp \
+	ValueObjectUpdater.cpp \
 	ValueObjectVariable.cpp
 
 .PATH:	${.CURDIR}/../../../llvm/lldb/source/Core

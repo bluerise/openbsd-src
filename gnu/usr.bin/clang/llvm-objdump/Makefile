@@ -6,12 +6,15 @@ PROG=	llvm-objdump
 BINDIR=	/usr/bin
 LIBEXECDIR=/usr/libexec
 
-SRCS=	COFFDump.cpp \
+SRCS=	llvm-objdump.cpp \
+	SourcePrinter.cpp \
+	COFFDump.cpp \
 	ELFDump.cpp \
 	MachODump.cpp \
 	WasmDump.cpp \
-	XCOFFDump.cpp \
-	llvm-objdump.cpp
+	XCOFFDump.cpp
+
+CPPFLAGS+=	-I${.OBJDIR}/../include/llvm-objdump
 
 .PATH:	${.CURDIR}/../../../llvm/llvm/tools/llvm-objdump
 

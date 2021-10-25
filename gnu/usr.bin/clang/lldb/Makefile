@@ -81,6 +81,11 @@ Options.inc: Options.td
 		-I ${LLVM_SRCS}/include \
 		-o ${.TARGET} ${.ALLSRC}
 
+BUILDFIRST=	VCSVersion.inc
+
+VCSVersion.inc:
+	touch $@
+
 LDADD+= -L ${.OBJDIR}/../libLLVM -lLLVM
 
 .include <bsd.prog.mk>

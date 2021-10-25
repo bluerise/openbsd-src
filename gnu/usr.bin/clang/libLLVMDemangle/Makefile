@@ -8,6 +8,7 @@ CPPFLAGS+=	-I${LLVM_SRCS}/include/llvm/Demangle
 SRCS+=	Demangle.cpp \
 	ItaniumDemangle.cpp \
 	MicrosoftDemangle.cpp \
-	MicrosoftDemangleNodes.cpp
+	MicrosoftDemangleNodes.cpp \
+	RustDemangle.cpp
 
 .PATH:	${.CURDIR}/../../../llvm/llvm/lib/Demangle

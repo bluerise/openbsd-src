@@ -85,6 +85,7 @@ int	_thread_atfork(void (*)(void), void (*)(void), void (*)(void), void *)
 	    __attribute__((weak));
 
 int
+__attribute__((weak))
 pthread_atfork(void (*prep)(void), void (*parent)(void), void (*child)(void))
 {
 	return (_thread_atfork(prep, parent, child, &__dso_handle));

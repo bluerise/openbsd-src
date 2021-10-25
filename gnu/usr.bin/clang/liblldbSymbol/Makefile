@@ -14,7 +14,6 @@ SRCS=	ArmUnwindInfo.cpp \
 	CompilerType.cpp \
 	DWARFCallFrameInfo.cpp \
 	DebugMacros.cpp \
-	Declaration.cpp \
 	DeclVendor.cpp \
 	FuncUnwinders.cpp \
 	Function.cpp \

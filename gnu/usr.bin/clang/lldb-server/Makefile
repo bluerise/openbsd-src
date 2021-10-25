@@ -75,6 +75,15 @@ LLVM_LIBDEPS=	clangAST \
     lldbTarget \
     lldbUtility
 
+BUILDFIRST=	VCSVersion.inc LLGSOptions.inc
+
+VCSVersion.inc:
+	touch $@
+
+LLGSOptions.inc: ${.CURDIR}/../../../llvm/lldb/tools/lldb-server/LLGSOptions.td
+	${.OBJDIR}/../llvm-tblgen/llvm-tblgen -gen-opt-parser-defs \
+		-I ${LLVM_SRCS}/include \
+		-o ${.TARGET} ${.ALLSRC}
 
 LDADD+= -L ${.OBJDIR}/../libLLVM -lLLVM
 

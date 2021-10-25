@@ -45,7 +45,8 @@ COPTIMIZE?=	-Oz
 .endif
 .if ${COMPILER_VERSION:Mclang}
 CWARNFLAGS+=	-Wno-unused-command-line-argument
-CWARNFLAGS+=	-Wno-address-of-packed-member -Wno-constant-conversion
+CWARNFLAGS+=	-Wno-address-of-packed-member -Wno-constant-conversion \
+		-Wno-unused-but-set-variable -Wno-gnu-folding-constant
 .endif
 
 DEBUG?=		-g

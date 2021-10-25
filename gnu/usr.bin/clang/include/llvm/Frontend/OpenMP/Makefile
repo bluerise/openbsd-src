@@ -5,8 +5,7 @@
 LLVM_SRCS=	${.CURDIR}/../../../../../../llvm/llvm
 
 DEFS=	OMP.h.inc \
-	OMP.cpp.inc \
-	OMP.cpp
+	OMP.inc
 
 all: ${DEFS}
 
@@ -23,14 +22,7 @@ OMP.h.inc: ${LLVM_SRCS}/include/llvm/Frontend/OpenMP/OMP.td
 		-I${LLVM_SRCS}/include \
 		-o ${.TARGET} ${.ALLSRC}
 
-OMP.cpp.inc: ${LLVM_SRCS}/include/llvm/Frontend/OpenMP/OMP.td
-	${.OBJDIR}/../../../../llvm-tblgen/llvm-tblgen -gen-directive-gen \
-		-I${LLVM_SRCS}/include/llvm/Frontend/OpenMP \
-		-I${LLVM_SRCS}/include/llvm/Frontend/ \
-		-I${LLVM_SRCS}/include \
-		-o ${.TARGET} ${.ALLSRC}
-
-OMP.cpp: ${LLVM_SRCS}/include/llvm/Frontend/OpenMP/OMP.td
+OMP.inc: ${LLVM_SRCS}/include/llvm/Frontend/OpenMP/OMP.td
 	${.OBJDIR}/../../../../llvm-tblgen/llvm-tblgen -gen-directive-impl \
 		-I${LLVM_SRCS}/include/llvm/Frontend/OpenMP \
 		-I${LLVM_SRCS}/include/llvm/Frontend/ \

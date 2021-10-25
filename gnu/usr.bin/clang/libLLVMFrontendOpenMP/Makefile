@@ -11,8 +11,3 @@ SRCS+=	OMP.cpp \
 	OMPIRBuilder.cpp
 
 .PATH:	${.CURDIR}/../../../llvm/llvm/lib/Frontend/OpenMP
-
-OMP.cpp:
-	ln -sf ${.OBJDIR}/../include/llvm/Frontend/OpenMP/OMP.cpp $@
-
-CLEANFILES+= OMP.cpp

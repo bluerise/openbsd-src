@@ -11,6 +11,7 @@ SRCS+=	AddressSanitizer.cpp \
 	ControlHeightReduction.cpp \
 	DataFlowSanitizer.cpp \
 	GCOVProfiling.cpp \
+	MemProfiler.cpp \
 	MemorySanitizer.cpp \
 	IndirectCallPromotion.cpp \
 	Instrumentation.cpp \

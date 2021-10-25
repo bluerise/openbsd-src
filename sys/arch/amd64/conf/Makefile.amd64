@@ -70,7 +70,8 @@ CMACHFLAGS+=	-mno-retpoline
 .endif
 .if ${COMPILER_VERSION:Mclang}
 NO_INTEGR_AS=	-no-integrated-as
-CWARNFLAGS+=	-Wno-address-of-packed-member -Wno-constant-conversion
+CWARNFLAGS+=	-Wno-address-of-packed-member -Wno-constant-conversion \
+		-Wno-unused-but-set-variable -Wno-gnu-folding-constant
 .endif
 
 DEBUG?=		-g

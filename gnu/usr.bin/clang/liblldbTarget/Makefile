@@ -22,6 +22,7 @@ SRCS=	ABI.cpp \
 	PathMappingList.cpp \
 	Platform.cpp \
 	Process.cpp \
+	ProcessTrace.cpp \
 	Queue.cpp \
 	QueueItem.cpp \
 	QueueList.cpp \
@@ -63,6 +64,10 @@ SRCS=	ABI.cpp \
 	ThreadPlanTracer.cpp \
 	ThreadPlanStack.cpp \
 	ThreadSpec.cpp \
+	Trace.cpp \
+	TraceCursor.cpp \
+	TraceExporter.cpp \
+	TraceInstructionDumper.cpp \
 	UnixSignals.cpp \
 	UnwindAssembly.cpp \
 	UnwindLLDB.cpp

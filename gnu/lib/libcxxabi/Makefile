@@ -15,6 +15,8 @@ SHDRDIR=	${.CURDIR}/../../../gnu/llvm/libcxx/include
 UHDRDIR=	${.CURDIR}/../../../gnu/llvm/libunwind/include
 CXXINCLUDEDIR=	/usr/include/c++/v1
 
+LOCALHDRDIR=    ${.CURDIR}/../libcxx/include/c++/v1
+
 .PATH: ${SRCDIR} ${.CURDIR}/../../../gnu/llvm/libunwind/src
 
 LIB=		c++abi
@@ -46,7 +48,8 @@ SRCS+=		abort_message.cpp \
 		UnwindRegistersSave.S \
 		libunwind.cpp
 
-CPPFLAGS+=	-Wall -I${SHDRDIR} -I${HDRDIR} -I${UHDRDIR}
+CPPFLAGS+=	-Wall -I${SHDRDIR} -I${HDRDIR} -I${UHDRDIR} \
+						-I${LOCALHDRDIR} -I${SHDRDIR}/../
 CPPFLAGS+=	-D_LIBUNWIND_IS_NATIVE_ONLY
 CPPFLAGS+=	-D_LIBCXXABI_BUILDING_LIBRARY
 CPPFLAGS+=	-DNDEBUG

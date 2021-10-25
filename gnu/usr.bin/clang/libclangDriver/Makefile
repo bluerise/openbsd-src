@@ -12,7 +12,6 @@ CPPFLAGS+=	-I${CLANG_SRCS}/lib/Driver
 # Driver
 SRCS=	Action.cpp \
 	Compilation.cpp \
-	DarwinSDKInfo.cpp \
 	Distro.cpp \
 	Driver.cpp \
 	DriverOptions.cpp \
@@ -30,6 +29,7 @@ SRCS=	Action.cpp \
 SRCS+=	AIX.cpp \
 	Ananas.cpp \
 	AMDGPU.cpp \
+	AMDGPUOpenMP.cpp \
 	AVR.cpp \
 	BareMetal.cpp \
 	Clang.cpp \
@@ -66,11 +66,13 @@ SRCS+=	AIX.cpp \
 	WebAssembly.cpp \
 	XCore.cpp \
 	PPCLinux.cpp \
-	InterfaceStubs.cpp
+	InterfaceStubs.cpp \
+	ZOS.cpp
 
 # Driver/Toolchains/Arch
 SRCS+=	AArch64.cpp \
 	ARM.cpp \
+	M68k.cpp \
 	Mips.cpp \
 	PPC.cpp \
 	RISCV.cpp \

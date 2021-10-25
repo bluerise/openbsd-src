@@ -9,9 +9,3 @@ CPPFLAGS+=	-I${LLVM_SRCS}/include/llvm/Frontend/OpenACC
 SRCS+=	ACC.cpp
 
 .PATH:	${.CURDIR}/../../../llvm/llvm/lib/Frontend/OpenACC
-
-ACC.cpp:
-	ln -sf ${.OBJDIR}/../include/llvm/Frontend/OpenACC/ACC.cpp $@
-
-CLEANFILES+= ACC.cpp
-

@@ -17,9 +17,11 @@ SRCS=	ASTTableGen.cpp \
 	ClangOpenCLBuiltinEmitter.cpp \
 	ClangOptionDocEmitter.cpp \
 	ClangSACheckersEmitter.cpp \
+	ClangSyntaxEmitter.cpp \
 	ClangTypeNodesEmitter.cpp \
 	MveEmitter.cpp \
 	NeonEmitter.cpp \
+	RISCVVEmitter.cpp \
 	SveEmitter.cpp \
 	TableGen.cpp
 

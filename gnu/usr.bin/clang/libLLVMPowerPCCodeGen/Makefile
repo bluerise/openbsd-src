@@ -6,6 +6,12 @@ NOPROFILE=
 CPPFLAGS+=	-I${.OBJDIR}/../include/llvm/PowerPC \
 		-I${LLVM_SRCS}/lib/Target/PowerPC
 
+# GISel
+SRCS+=	PPCInstructionSelector.cpp \
+	PPCCallLowering.cpp \
+	PPCRegisterBankInfo.cpp \
+	PPCLegalizerInfo.cpp
+
 SRCS+=	PPCBoolRetToInt.cpp \
 	PPCAsmPrinter.cpp \
 	PPCBranchSelector.cpp \
@@ -29,7 +35,6 @@ SRCS+=	PPCBoolRetToInt.cpp \
 	PPCMIPeephole.cpp \
 	PPCRegisterInfo.cpp \
 	PPCReturnProtectorLowering.cpp \
-	PPCQPXLoadSplat.cpp \
 	PPCSubtarget.cpp \
 	PPCTargetMachine.cpp \
 	PPCTargetObjectFile.cpp \
@@ -45,3 +50,4 @@ SRCS+=	PPCBoolRetToInt.cpp \
 	PPCLowerMASSVEntries.cpp
 
 .PATH:	${.CURDIR}/../../../llvm/llvm/lib/Target/PowerPC
+.PATH:	${.CURDIR}/../../../llvm/llvm/lib/Target/PowerPC/GISel

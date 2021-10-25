@@ -16,6 +16,7 @@ SRCS+=	AsmLexer.cpp \
 	MCAsmParserExtension.cpp \
 	MCTargetAsmParser.cpp \
 	MasmParser.cpp \
-	WasmAsmParser.cpp
+	WasmAsmParser.cpp \
+	XCOFFAsmParser.cpp
 
 .PATH:	${.CURDIR}/../../../llvm/llvm/lib/MC/MCParser

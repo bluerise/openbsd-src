@@ -8,6 +8,9 @@ SUBDIRS=	opcodes bfd
 CONF_SUBDIRS=	opcodes bfd
 
 CFLAGS+=	${PIE_DEFAULT}
+.if ${COMPILER_VERSION:Mclang}
+CFLAGS+=	-Wno-unused-but-set-variable -Wno-null-pointer-subtraction
+.endif
 XCFLAGS=	CC="${CC}" CFLAGS="${CFLAGS} ${COPTS}" LDFLAGS="${LDSTATIC}"
 # This allows moving the whole binutils installation around for 
 # testing purposes

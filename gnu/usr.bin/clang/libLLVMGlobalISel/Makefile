@@ -22,6 +22,7 @@ SRCS+=	CSEInfo.cpp \
 	Legalizer.cpp \
 	LegalizerHelper.cpp \
 	LegalizerInfo.cpp \
+	LegacyLegalizerInfo.cpp \
 	Localizer.cpp \
 	LostDebugLocObserver.cpp \
 	MachineIRBuilder.cpp \

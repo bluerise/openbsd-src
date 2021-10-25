@@ -15,6 +15,7 @@ SRCS+=	Archive.cpp \
 	ObjectELF.cpp \
 	ELFObjectFile.cpp \
 	ObjectError.cpp \
+	FaultMapParser.cpp \
 	IRObjectFile.cpp \
 	IRSymtab.cpp \
 	MachOObjectFile.cpp \
@@ -29,6 +30,7 @@ SRCS+=	Archive.cpp \
 	SymbolSize.cpp \
 	TapiFile.cpp \
 	TapiUniversal.cpp \
+	MachOUniversalWriter.cpp \
 	WasmObjectFile.cpp \
 	WindowsMachineFlag.cpp \
 	WindowsResource.cpp \

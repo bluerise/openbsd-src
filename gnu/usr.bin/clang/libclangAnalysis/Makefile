@@ -9,6 +9,7 @@ CPPFLAGS+=	${CLANG_INCLUDES}
 .include <bsd.own.mk>
 SRCS=	AnalysisDeclContext.cpp \
 	BodyFarm.cpp \
+	CalledOnceCheck.cpp \
 	CFG.cpp \
 	CFGReachabilityAnalysis.cpp \
 	CFGStmtMap.cpp \
@@ -20,6 +21,7 @@ SRCS=	AnalysisDeclContext.cpp \
 	CodeInjector.cpp \
 	Dominators.cpp \
 	ExprMutationAnalyzer.cpp \
+	IssueHash.cpp \
 	LiveVariables.cpp \
 	ObjCNoReturn.cpp \
 	PathDiagnostic.cpp \

@@ -62,7 +62,6 @@ SRCS=	SBAddress.cpp \
 	SBThreadCollection.cpp \
 	SBThreadPlan.cpp \
 	SBTrace.cpp \
-	SBTraceOptions.cpp \
 	SBType.cpp \
 	SBTypeCategory.cpp \
 	SBTypeEnumMember.cpp \

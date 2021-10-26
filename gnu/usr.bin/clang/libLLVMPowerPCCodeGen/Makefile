@@ -13,6 +13,7 @@ SRCS+=	PPCBoolRetToInt.cpp \
 	PPCCallingConv.cpp \
 	PPCCCState.cpp \
 	PPCCTRLoops.cpp \
+	PPCExpandAtomicPseudoInsts.cpp \
 	PPCHazardRecognizers.cpp \
 	PPCInstrInfo.cpp \
 	PPCISelDAGToDAG.cpp \

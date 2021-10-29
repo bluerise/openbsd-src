@@ -8,8 +8,10 @@ CPPFLAGS+=	-I${.OBJDIR}/../include/llvm/AArch64 \
 
 # GISel
 SRCS+=	AArch64CallLowering.cpp \
+	AArch64GlobalISelUtils.cpp \
 	AArch64InstructionSelector.cpp \
 	AArch64LegalizerInfo.cpp \
+	AArch64O0PreLegalizerCombiner.cpp \
 	AArch64PreLegalizerCombiner.cpp \
 	AArch64PostLegalizerCombiner.cpp \
 	AArch64RegisterBankInfo.cpp
@@ -37,6 +39,7 @@ SRCS+=	AArch64A57FPLoadBalancing.cpp \
 	AArch64ISelLowering.cpp \
 	AArch64InstrInfo.cpp \
 	AArch64LoadStoreOptimizer.cpp \
+	AArch64LowerHomogeneousPrologEpilog.cpp \
 	AArch64MachineFunctionInfo.cpp \
 	AArch64MacroFusion.cpp \
 	AArch64MCInstLower.cpp \

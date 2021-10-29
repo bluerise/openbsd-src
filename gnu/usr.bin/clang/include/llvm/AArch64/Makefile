@@ -12,6 +12,7 @@ HDRS=	AArch64GenAsmMatcher.inc \
 	AArch64GenDisassemblerTables.inc \
 	AArch64GenFastISel.inc \
 	AArch64GenGlobalISel.inc \
+	AArch64GenO0PreLegalizeGICombiner.inc \
 	AArch64GenPreLegalizeGICombiner.inc \
 	AArch64GenPostLegalizeGICombiner.inc \
 	AArch64GenInstrInfo.inc \
@@ -68,6 +69,12 @@ AArch64GenFastISel.inc: ${LLVM_SRCS}/lib/Target/AArch64/AArch64.td
 
 AArch64GenGlobalISel.inc: ${LLVM_SRCS}/lib/Target/AArch64/AArch64.td
 	${.OBJDIR}/../../../llvm-tblgen/llvm-tblgen -gen-global-isel \
+		-I${LLVM_SRCS}/include -I${LLVM_SRCS}/lib/Target/AArch64 \
+		-o ${.TARGET} ${.ALLSRC}
+
+AArch64GenO0PreLegalizeGICombiner.inc: ${LLVM_SRCS}/lib/Target/AArch64/AArch64.td
+	${.OBJDIR}/../../../llvm-tblgen/llvm-tblgen -gen-global-isel-combiner \
+		-combiners="AArch64O0PreLegalizerCombinerHelper" \
 		-I${LLVM_SRCS}/include -I${LLVM_SRCS}/lib/Target/AArch64 \
 		-o ${.TARGET} ${.ALLSRC}
 

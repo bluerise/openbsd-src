@@ -250,7 +250,6 @@ void RetpolineThunkInserter::populateThunk(MachineFunction &MF) {
 
   CallTarget->back().setPreInstrSymbol(MF, TargetSym);
   BuildMI(CallTarget, DebugLoc(), TII->get(RetOpc));
-  BuildMI(CallTarget, DebugLoc(), TII->get(X86::LFENCE));
 }
 
 FunctionPass *llvm::createX86IndirectThunksPass() {

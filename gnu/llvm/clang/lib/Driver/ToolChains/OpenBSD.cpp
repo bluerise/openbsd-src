@@ -220,8 +220,6 @@ void openbsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath(crtend)));
   }
 
-  ToolChain.addProfileRTLibs(Args, CmdArgs);
-
   const char *Exec = Args.MakeArgString(ToolChain.GetLinkerPath());
   C.addCommand(std::make_unique<Command>(
       JA, *this, ResponseFileSupport::AtFileCurCP(), Exec, CmdArgs, Inputs));
@@ -296,23 +294,14 @@ void OpenBSD::AddCXXStdlibLibArgs(const ArgList &Args,
 
   CmdArgs.push_back(Profiling ? "-lc++_p" : "-lc++");
   CmdArgs.push_back(Profiling ? "-lc++abi_p" : "-lc++abi");
-  CmdArgs.push_back(Profiling ? "-lpthread_p" : "-lpthread");
 }
 
 std::string OpenBSD::getCompilerRT(const ArgList &Args,
                                    StringRef Component,
                                    FileType Type) const {
-  if (Component == "builtins") {
-    SmallString<128> Path(getDriver().SysRoot);
-    llvm::sys::path::append(Path, "/usr/lib/libcompiler_rt.a");
-    return std::string(Path.str());
-  } else {
-    SmallString<128> P(getDriver().ResourceDir);
-    std::string CRTBasename =
-        getCompilerRTBasename(Args, Component, Type, /*AddArch=*/false);
-    llvm::sys::path::append(P, "lib", CRTBasename);
-    return std::string(P.str());
-  }
+  SmallString<128> Path(getDriver().SysRoot);
+  llvm::sys::path::append(Path, "/usr/lib/libcompiler_rt.a");
+  return std::string(Path.str());
 }
 
 Tool *OpenBSD::buildAssembler() const {

@@ -141,6 +141,8 @@ gpioleds*	at fdt?
 apldart*	at fdt? early 1
 apldog*		at fdt? early 1
 apldwusb*	at fdt?
+apliic*		at fdt?
+iic*		at apliic?
 aplintc*	at fdt? early 1
 aplmbox*	at fdt?
 aplpcie*	at fdt?
@@ -502,6 +504,7 @@ pcyrtc*		at iic?			# PCF85063A/TP RTC
 rkpmic*		at iic?			# RK808 PMIC
 sypwr*		at iic?			# SY8106A regulator
 tcpci*		at iic?			# USB Type-C controller
+tpstc*		at iic?			# USB Type-C controller
 
 # GPIO "pin bus" drivers
 gpioiic*	at gpio?		# I2C bus bit-banging

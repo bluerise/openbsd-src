@@ -105,6 +105,8 @@ wsdisplay*	at simplefb?
 apldart*	at fdt? early 1
 apldog*		at fdt? early 1
 apldwusb*	at fdt?
+apliic*		at fdt?
+iic*		at apliic?
 aplintc*	at fdt? early 1
 aplmbox*	at fdt?
 aplpcie*	at fdt?

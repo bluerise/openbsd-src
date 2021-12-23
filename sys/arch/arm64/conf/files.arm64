@@ -151,6 +151,10 @@ device	apldwusb: fdt
 attach	apldwusb at fdt
 file	arch/arm64/dev/apldwusb.c		apldwusb
 
+device	apliic: i2cbus
+attach	apliic at fdt
+file	arch/arm64/dev/apliic.c			apliic
+
 device	aplintc
 attach	aplintc at fdt
 file	arch/arm64/dev/aplintc.c		aplintc

@@ -33,6 +33,8 @@
 #include <dev/sdmmc/sdmmcvar.h>
 #include <dev/sdmmc/sdmmc_ioreg.h>
 
+#include <dev/ic/dwmmcvar.h>
+
 #define SDMMC_CTRL		0x0000
 #define  SDMMC_CTRL_USE_INTERNAL_DMAC	(1 << 25)
 #define  SDMMC_CTRL_DMA_ENABLE		(1 << 5)
@@ -185,46 +187,6 @@ struct dwmmc_desc64 {
 #define DES2_BS2(sz)	DES1_BS2(sz)
 #define DES2_BS1(sz)	DES1_BS1(sz)
 
-struct dwmmc_softc {
-	struct device		sc_dev;
-	bus_space_tag_t		sc_iot;
-	bus_space_handle_t	sc_ioh;
-	bus_size_t		sc_size;
-	bus_dma_tag_t		sc_dmat;
-	bus_dmamap_t		sc_dmap;
-	int			sc_node;
-
-	void			*sc_ih;
-
-	uint32_t		sc_clkbase;
-	uint32_t		sc_fifo_depth;
-	uint32_t		sc_fifo_width;
-	void (*sc_read_data)(struct dwmmc_softc *, u_char *, int);
-	void (*sc_write_data)(struct dwmmc_softc *, u_char *, int);
-	int			sc_blklen;
-
-	bus_dmamap_t		sc_desc_map;
-	bus_dma_segment_t	sc_desc_segs[1];
-	caddr_t			sc_desc;
-	int			sc_dma64;
-	int			sc_dmamode;
-	uint32_t		sc_idsts;
-
-	uint32_t		sc_gpio[4];
-	int			sc_sdio_irq;
-	uint32_t		sc_pwrseq;
-	uint32_t		sc_vdd;
-
-	struct device		*sc_sdmmc;
-};
-
-int	dwmmc_match(struct device *, void *, void *);
-void	dwmmc_attach(struct device *, struct device *, void *);
-
-const struct cfattach dwmmc_ca = {
-	sizeof(struct dwmmc_softc), dwmmc_match, dwmmc_attach
-};
-
 struct cfdriver dwmmc_cd = {
 	NULL, "dwmmc", DV_DULL
 };
@@ -263,51 +225,14 @@ void	dwmmc_read_data32(struct dwmmc_softc *, u_char *, int);
 void	dwmmc_write_data32(struct dwmmc_softc *, u_char *, int);
 void	dwmmc_read_data64(struct dwmmc_softc *, u_char *, int);
 void	dwmmc_write_data64(struct dwmmc_softc *, u_char *, int);
-void	dwmmc_pwrseq_pre(uint32_t);
-void	dwmmc_pwrseq_post(uint32_t);
 
 int
-dwmmc_match(struct device *parent, void *match, void *aux)
+dwmmc_attach(struct dwmmc_softc *sc)
 {
-	struct fdt_attach_args *faa = aux;
-
-	return (OF_is_compatible(faa->fa_node, "hisilicon,hi3660-dw-mshc") ||
-	    OF_is_compatible(faa->fa_node, "hisilicon,hi3670-dw-mshc") ||
-	    OF_is_compatible(faa->fa_node, "rockchip,rk3288-dw-mshc") ||
-	    OF_is_compatible(faa->fa_node, "samsung,exynos5420-dw-mshc") ||
-	    OF_is_compatible(faa->fa_node, "snps,dw-mshc"));
-}
-
-void
-dwmmc_attach(struct device *parent, struct device *self, void *aux)
-{
-	struct dwmmc_softc *sc = (struct dwmmc_softc *)self;
-	struct fdt_attach_args *faa = aux;
 	struct sdmmcbus_attach_args saa;
-	uint32_t freq = 0, div = 0;
-	uint32_t hcon, width;
+	uint32_t hcon;
 	uint32_t fifoth;
 	int error, timeout;
-
-	if (faa->fa_nreg < 1) {
-		printf(": no registers\n");
-		return;
-	}
-
-	sc->sc_node = faa->fa_node;
-	sc->sc_iot = faa->fa_iot;
-	sc->sc_size = faa->fa_reg[0].size;
-
-	if (bus_space_map(sc->sc_iot, faa->fa_reg[0].addr,
-	    faa->fa_reg[0].size, 0, &sc->sc_ioh)) {
-		printf(": can't map registers\n");
-		return;
-	}
-
-	pinctrl_byname(faa->fa_node, "default");
-
-	clock_enable_all(faa->fa_node);
-	reset_deassert_all(faa->fa_node);
 
 	/*
 	 * Determine FIFO width from hardware configuration register.
@@ -327,10 +252,9 @@ dwmmc_attach(struct device *parent, struct device *self, void *aux)
 		break;
 	default:
 		printf(": unsupported FIFO width\n");
-		return;
+		return ENXIO;
 	}
 
-	sc->sc_fifo_depth = OF_getpropint(faa->fa_node, "fifo-depth", 0);
 	if (sc->sc_fifo_depth == 0) {
 		fifoth = HREAD4(sc, SDMMC_FIFOTH);
 		sc->sc_fifo_depth = SDMMC_FIFOTH_RXWM(fifoth) + 1;
@@ -338,43 +262,6 @@ dwmmc_attach(struct device *parent, struct device *self, void *aux)
 
 	if (hcon & SDMMC_HCON_DMA64)
 		sc->sc_dma64 = 1;
-
-	/* Some SoCs pre-divide the clock. */
-	if (OF_is_compatible(faa->fa_node, "rockchip,rk3288-dw-mshc"))
-		div = 1;
-	if (OF_is_compatible(faa->fa_node, "hisilicon,hi3660-dw-mshc") ||
-	    OF_is_compatible(faa->fa_node, "hisilicon,hi3670-dw-mshc"))
-		div = 7;
-
-	/* Force the base clock to 50MHz on Rockchip SoCs. */
-	if (OF_is_compatible(faa->fa_node, "rockchip,rk3288-dw-mshc"))
-		freq = 50000000;
-
-	freq = OF_getpropint(faa->fa_node, "clock-frequency", freq);
-	if (freq > 0)
-		clock_set_frequency(faa->fa_node, "ciu", (div + 1) * freq);
-
-	sc->sc_clkbase = clock_get_frequency(faa->fa_node, "ciu");
-	/* if ciu clock is missing the rate is clock-frequency */
-	if (sc->sc_clkbase == 0)
-		sc->sc_clkbase = freq;
-	div = OF_getpropint(faa->fa_node, "samsung,dw-mshc-ciu-div", div);
-	sc->sc_clkbase /= (div + 1);
-
-	sc->sc_ih = fdt_intr_establish(faa->fa_node, IPL_BIO,
-	    dwmmc_intr, sc, sc->sc_dev.dv_xname);
-	if (sc->sc_ih == NULL) {
-		printf(": can't establish interrupt\n");
-		goto unmap;
-	}
-
-	OF_getpropintarray(faa->fa_node, "cd-gpios", sc->sc_gpio,
-	    sizeof(sc->sc_gpio));
-	if (sc->sc_gpio[0])
-		gpio_controller_config_pin(sc->sc_gpio, GPIO_CONFIG_INPUT);
-
-	sc->sc_sdio_irq = (OF_getproplen(sc->sc_node, "cap-sdio-irq") == 0);
-	sc->sc_pwrseq = OF_getpropint(sc->sc_node, "mmc-pwrseq", 0);
 
 	printf(": %d MHz base clock\n", sc->sc_clkbase / 1000000);
 
@@ -397,7 +284,6 @@ dwmmc_attach(struct device *parent, struct device *self, void *aux)
 	/* Start out in non-DMA mode. */
 	dwmmc_pio_mode(sc);
 
-	sc->sc_dmat = faa->fa_dmat;
 	dwmmc_alloc_descriptors(sc);
 	dwmmc_init_descriptors(sc);
 
@@ -405,7 +291,7 @@ dwmmc_attach(struct device *parent, struct device *self, void *aux)
 	    DWMMC_MAXSEGSZ, 0, BUS_DMA_WAITOK|BUS_DMA_ALLOCNOW, &sc->sc_dmap);
 	if (error) {
 		printf(": can't create DMA map\n");
-		goto unmap;
+		return ENOMEM;
 	}
 
 	memset(&saa, 0, sizeof(saa));
@@ -415,23 +301,10 @@ dwmmc_attach(struct device *parent, struct device *self, void *aux)
 	saa.dmat = sc->sc_dmat;
 	saa.dmap = sc->sc_dmap;
 	saa.caps |= SMC_CAPS_DMA;
+	saa.caps |= sc->sc_caps;
 
-	if (OF_getproplen(sc->sc_node, "cap-mmc-highspeed") == 0)
-		saa.caps |= SMC_CAPS_MMC_HIGHSPEED;
-	if (OF_getproplen(sc->sc_node, "cap-sd-highspeed") == 0)
-		saa.caps |= SMC_CAPS_SD_HIGHSPEED;
-
-	width = OF_getpropint(faa->fa_node, "bus-width", 1);
-	if (width >= 8)
-		saa.caps |= SMC_CAPS_8BIT_MODE;
-	if (width >= 4)
-		saa.caps |= SMC_CAPS_4BIT_MODE;
-
-	sc->sc_sdmmc = config_found(self, &saa, NULL);
-	return;
-
-unmap:
-	bus_space_unmap(sc->sc_iot, sc->sc_ioh, sc->sc_size);
+	sc->sc_sdmmc = config_found(&sc->sc_dev, &saa, NULL);
+	return 0;
 }
 
 int
@@ -602,6 +475,10 @@ dwmmc_card_detect(sdmmc_chipset_handle_t sch)
 	struct dwmmc_softc *sc = sch;
 	uint32_t cdetect;
 
+	if (sc->sc_card_detect)
+		return sc->sc_card_detect(sc);
+
+#if 0
 	if (OF_getproplen(sc->sc_node, "non-removable") == 0)
 		return 1;
 
@@ -613,6 +490,7 @@ dwmmc_card_detect(sdmmc_chipset_handle_t sch)
 		inverted = (OF_getproplen(sc->sc_node, "cd-inverted") == 0);
 		return inverted ? !val : val;
 	}
+#endif
 
 	cdetect = HREAD4(sc, SDMMC_CDETECT);
 	return !(cdetect & SDMMC_CDETECT_CARD_DETECT_0);
@@ -627,16 +505,16 @@ dwmmc_bus_power(sdmmc_chipset_handle_t sch, uint32_t ocr)
 	if (ISSET(ocr, MMC_OCR_3_2V_3_3V|MMC_OCR_3_3V_3_4V))
 		vdd = 3300000;
 
-	if (sc->sc_vdd == 0 && vdd > 0)
-		dwmmc_pwrseq_pre(sc->sc_pwrseq);
+	if (sc->sc_vdd == 0 && vdd > 0 && sc->sc_pwrseq_pre)
+		sc->sc_pwrseq_pre(sc->sc_pwrseq);
 
 	if (ISSET(ocr, MMC_OCR_3_2V_3_3V|MMC_OCR_3_3V_3_4V))
 		HSET4(sc, SDMMC_PWREN, 1);
 	else
 		HCLR4(sc, SDMMC_PWREN, 0);
 
-	if (sc->sc_vdd == 0 && vdd > 0)
-		dwmmc_pwrseq_post(sc->sc_pwrseq);
+	if (sc->sc_vdd == 0 && vdd > 0 && sc->sc_pwrseq_post)
+		sc->sc_pwrseq_post(sc->sc_pwrseq);
 
 	sc->sc_vdd = vdd;
 	return 0;
@@ -1204,69 +1082,4 @@ dwmmc_write_data64(struct dwmmc_softc *sc, u_char *datap, int datalen)
 		HWRITE4(sc, SDMMC_FIFO_BASE + 4, rv);
 	}
 	HWRITE4(sc, SDMMC_RINTSTS, SDMMC_RINTSTS_TXDR);
-}
-
-void
-dwmmc_pwrseq_pre(uint32_t phandle)
-{
-	uint32_t *gpios, *gpio;
-	int node;
-	int len;
-
-	node = OF_getnodebyphandle(phandle);
-	if (node == 0)
-		return;
-
-	if (!OF_is_compatible(node, "mmc-pwrseq-simple"))
-		return;
-
-	pinctrl_byname(node, "default");
-
-	clock_enable(node, "ext_clock");
-
-	len = OF_getproplen(node, "reset-gpios");
-	if (len <= 0)
-		return;
-
-	gpios = malloc(len, M_TEMP, M_WAITOK);
-	OF_getpropintarray(node, "reset-gpios", gpios, len);
-
-	gpio = gpios;
-	while (gpio && gpio < gpios + (len / sizeof(uint32_t))) {
-		gpio_controller_config_pin(gpio, GPIO_CONFIG_OUTPUT);
-		gpio_controller_set_pin(gpio, 1);
-		gpio = gpio_controller_next_pin(gpio);
-	}
-
-	free(gpios, M_TEMP, len);
-}
-
-void
-dwmmc_pwrseq_post(uint32_t phandle)
-{
-	uint32_t *gpios, *gpio;
-	int node;
-	int len;
-
-	node = OF_getnodebyphandle(phandle);
-	if (node == 0)
-		return;
-
-	if (!OF_is_compatible(node, "mmc-pwrseq-simple"))
-		return;
-
-	len = OF_getproplen(node, "reset-gpios");
-	if (len <= 0)
-		return;
-
-	gpios = malloc(len, M_TEMP, M_WAITOK);
-	OF_getpropintarray(node, "reset-gpios", gpios, len);
-
-	gpio = gpios;
-	while (gpio && gpio < gpios + (len / sizeof(uint32_t))) {
-		gpio_controller_set_pin(gpio, 0);
-		gpio = gpio_controller_next_pin(gpio);
-	}
-
-	free(gpios, M_TEMP, len);
 }

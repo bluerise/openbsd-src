@@ -54,6 +54,7 @@ com*		at acpi?
 dwgpio*		at acpi?
 dwiic*		at acpi?
 iic*		at dwiic?
+dwmmc*		at acpi?
 ehci*		at acpi?
 ipmi*		at acpi?
 ohci*		at acpi?

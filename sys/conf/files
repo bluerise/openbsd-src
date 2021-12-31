@@ -474,6 +474,10 @@ define	sdhc
 device	sdhc: sdmmcbus
 file	dev/sdmmc/sdhc.c		sdhc
 
+# DesignWare SD/MMC controller
+device	dwmmc: sdmmcbus
+file	dev/ic/dwmmc.c			dwmmc
+
 # Winbond Integrated Media Reader
 device wbsd: sdmmcbus
 file	dev/ic/w83l518d.c		wbsd

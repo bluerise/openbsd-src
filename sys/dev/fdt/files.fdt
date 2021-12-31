@@ -383,9 +383,8 @@ device	rkvop
 attach	rkvop at fdt
 file	dev/fdt/rkvop.c			rkvop
 
-device	dwmmc: sdmmcbus
-attach	dwmmc at fdt
-file	dev/fdt/dwmmc.c			dwmmc
+attach	dwmmc at fdt with dwmmc_fdt
+file	dev/fdt/dwmmc_fdt.c		dwmmc_fdt
 
 device	dwdog
 attach	dwdog at fdt

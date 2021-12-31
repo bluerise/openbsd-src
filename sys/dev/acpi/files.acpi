@@ -187,6 +187,10 @@ file	dev/acpi/pluart_acpi.c		pluart_acpi
 attach	sdhc at acpi with sdhc_acpi
 file	dev/acpi/sdhc_acpi.c		sdhc_acpi
 
+# DWMMC
+attach	dwmmc at acpi with dwmmc_acpi
+file	dev/acpi/dwmmc_acpi.c		dwmmc_acpi
+
 # OHCI
 attach	ohci at acpi with ohci_acpi
 file	dev/acpi/ohci_acpi.c		ohci_acpi

@@ -2961,6 +2961,72 @@ acpi_foundsony(struct aml_node *node, void *arg)
 /* Support for _DSD Device Properties. */
 
 int
+acpi_is_compatible(struct aml_node *node, const char *compatible)
+{
+	struct aml_value dsd;
+	int i, j;
+
+	/* daffd814-6eba-4d8c-8a91-bc9bbf4aa301 */
+	static uint8_t prop_guid[] = {
+		0x14, 0xd8, 0xff, 0xda, 0xba, 0x6e, 0x8c, 0x4d,
+		0x8a, 0x91, 0xbc, 0x9b, 0xbf, 0x4a, 0xa3, 0x01,
+	};
+
+	if (aml_evalname(acpi_softc, node, "_DSD", 0, NULL, &dsd))
+		return 0;
+
+	if (dsd.type != AML_OBJTYPE_PACKAGE || dsd.length != 2 ||
+	    dsd.v_package[0]->type != AML_OBJTYPE_BUFFER ||
+	    dsd.v_package[1]->type != AML_OBJTYPE_PACKAGE)
+		return 0;
+
+	/* Check UUID. */
+	if (dsd.v_package[0]->length != sizeof(prop_guid) ||
+	    memcmp(dsd.v_package[0]->v_buffer, prop_guid,
+	    sizeof(prop_guid)) != 0)
+		return 0;
+
+	/* Check properties. */
+	for (i = 0; i < dsd.v_package[1]->length; i++) {
+		struct aml_value *res = dsd.v_package[1]->v_package[i];
+		struct aml_value *val;
+
+		if (res->type != AML_OBJTYPE_PACKAGE || res->length != 2 ||
+		    res->v_package[0]->type != AML_OBJTYPE_STRING ||
+		    strcmp(res->v_package[0]->v_string, "compatible") != 0)
+			continue;
+
+		val = res->v_package[1];
+		if (val->type == AML_OBJTYPE_OBJREF)
+			val = val->v_objref.ref;
+
+		if (val->type == AML_OBJTYPE_STRING &&
+		    val->length == strlen(compatible) &&
+		    strcmp(val->v_string, compatible) == 0)
+			return 1;
+
+		if (val->type != AML_OBJTYPE_PACKAGE)
+			break;
+
+		res = val;
+		for (j = 0; j < res->length; j++) {
+			val = res->v_package[j];
+			if (val->type == AML_OBJTYPE_OBJREF)
+				val = val->v_objref.ref;
+			if (val->type != AML_OBJTYPE_STRING)
+				continue;
+			if (val->length == strlen(compatible) &&
+			    strcmp(val->v_string, compatible) == 0)
+				return 1;
+		}
+
+		break;
+	}
+
+	return 0;
+}
+
+int
 acpi_getprop(struct aml_node *node, const char *prop, void *buf, int buflen)
 {
 	struct aml_value dsd;

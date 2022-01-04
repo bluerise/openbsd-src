@@ -387,6 +387,7 @@ int64_t	acpi_getsta(struct acpi_softc *sc, struct aml_node *);
 
 int	acpi_getprop(struct aml_node *, const char *, void *, int);
 uint64_t acpi_getpropint(struct aml_node *, const char *, uint64_t);
+int	acpi_is_compatible(struct aml_node *, const char *);
 
 int	acpi_record_event(struct acpi_softc *, u_int);
 

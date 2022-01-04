@@ -267,3 +267,7 @@ file	dev/acpi/acpihid.c		acpihid
 # Freescale i.MX I2C controller
 attach	imxiic at acpi with imxiic_acpi
 file	dev/acpi/imxiic_acpi.c		imxiic_acpi
+
+# DesignWare Ethernet QoS
+attach	dwqe at acpi with dwqe_acpi
+file	dev/acpi/if_dwqe_acpi.c		dwqe_acpi

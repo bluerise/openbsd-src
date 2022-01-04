@@ -431,6 +431,10 @@ file	dev/ic/malo.c			malo
 device	bwi: ether, ifnet, ifmedia, firmload, wlan
 file	dev/ic/bwi.c			bwi
 
+# DesignWare Ethernet QoS
+device	dwqe: ether, ifnet, ifmedia, mii
+file	dev/ic/dwqe.c			dwqe
+
 # Attributes which machine-independent bus support can be attached to.
 # These should be defined here, because some of these busses can have
 # devices which provide these attributes, and we'd like to avoid hairy

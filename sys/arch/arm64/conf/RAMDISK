@@ -45,6 +45,7 @@ ahci*		at acpi?
 ccp*		at acpi?		# AMD Cryptographic Co-processor
 com*		at acpi?
 dwmmc*		at acpi?
+dwqe*		at acpi?
 ehci*		at acpi?
 ohci*		at acpi?
 pluart*		at acpi?

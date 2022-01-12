@@ -40,7 +40,7 @@ struct sdhc_softc {
 
 /* Host controller functions called by the attachment driver. */
 int	sdhc_host_found(struct sdhc_softc *, bus_space_tag_t,
-	    bus_space_handle_t, bus_size_t, int, u_int32_t);
+	    bus_space_handle_t, bus_size_t, int, uint64_t, uint64_t);
 int	sdhc_activate(struct device *, int);
 void	sdhc_shutdown(void *);
 int	sdhc_intr(void *);
@@ -49,9 +49,8 @@ void	sdhc_needs_discover(struct sdhc_softc *);
 
 /* flag values */
 #define SDHC_F_NOPWR0		(1 << 0)
-#define SDHC_F_NODDR50		(1 << 1)
-#define SDHC_F_NONREMOVABLE	(1 << 2)
-#define SDHC_F_32BIT_ACCESS	(1 << 3)
-#define SDHC_F_NO_HS_BIT	(1 << 4)
+#define SDHC_F_NONREMOVABLE	(1 << 1)
+#define SDHC_F_32BIT_ACCESS	(1 << 2)
+#define SDHC_F_NO_HS_BIT	(1 << 3)
 
 #endif

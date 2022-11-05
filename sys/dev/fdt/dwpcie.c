@@ -347,6 +347,9 @@ int	dwpcie_bs_iomap(bus_space_tag_t, bus_addr_t, bus_size_t, int,
 int	dwpcie_bs_memmap(bus_space_tag_t, bus_addr_t, bus_size_t, int,
 	    bus_space_handle_t *);
 
+int	dwpcie_get_capability(struct dwpcie_softc *, int,
+	    int *, pcireg_t *);
+
 struct interrupt_controller dwpcie_ic = {
 	.ic_barrier = intr_barrier
 };
@@ -1275,7 +1278,8 @@ dwpcie_sc8280xp_init(struct dwpcie_softc *sc)
 {
 	uint32_t *perst_gpio;
 	ssize_t perst_gpiolen;
-	int timo;
+	int capoff, timo;
+	uint32_t reg;
 
 	/* TODO: verify */
 	sc->sc_num_viewport = 8;
@@ -1325,8 +1329,14 @@ dwpcie_sc8280xp_init(struct dwpcie_softc *sc)
 
 	free(perst_gpio, M_TEMP, perst_gpiolen);
 
+	if (!dwpcie_get_capability(sc, PCI_CAP_PCIEXPRESS, &capoff, NULL))
+		return ENXIO;
+
+	printf("%s:%d\n", __func__, __LINE__);
 	for (timo = 20000; timo > 0; timo--) {
-		if (dwpcie_link_up(sc))
+		reg = bus_space_read_2(sc->sc_iot, sc->sc_ioh,
+		    capoff + PCI_PCIE_LNKSTA);
+		if (reg & PCI_PCIE_LNKSTA_DLLLA)
 			break;
 		delay(10);
 	}
@@ -1768,4 +1778,36 @@ dwpcie_bs_memmap(bus_space_tag_t t, bus_addr_t addr, bus_size_t size,
 	}
 
 	return ENXIO;
+}
+
+int
+dwpcie_get_capability(struct dwpcie_softc *sc, int capid,
+    int *offset, pcireg_t *value)
+{
+	pcireg_t reg;
+	unsigned int ofs;
+
+	reg = bus_space_read_2(sc->sc_iot, sc->sc_ioh, PCI_CAPLISTPTR_REG);
+	ofs = PCI_CAPLIST_PTR(reg);
+	while (ofs != 0) {
+		printf("%s:%d: %x\n", __func__, __LINE__, ofs);
+		/*
+		 * Some devices, like parts of the NVIDIA C51 chipset,
+		 * have a broken Capabilities List.  So we need to do
+		 * a sanity check here.
+		 */
+		if ((ofs & 3) || (ofs < 0x40))
+			return (0);
+		reg = bus_space_read_2(sc->sc_iot, sc->sc_ioh, ofs);
+		if (PCI_CAPLIST_CAP(reg) == capid) {
+			if (offset)
+				*offset = ofs;
+			if (value)
+				*value = reg;
+			return (1);
+		}
+		ofs = PCI_CAPLIST_NEXT(reg);
+	}
+
+	return (0);
 }

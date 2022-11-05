@@ -37,6 +37,7 @@
 #include <dev/ofw/ofw_misc.h>
 #include <dev/ofw/ofw_pinctrl.h>
 #include <dev/ofw/ofw_power.h>
+#include <dev/ofw/ofw_regulator.h>
 #include <dev/ofw/fdt.h>
 
 /* Registers */
@@ -169,6 +170,23 @@
 #define  ANATOP_PLLOUT_CTL_SEL_MASK			0xf
 #define ANATOP_PLLOUT_DIV			0x7c
 #define  ANATOP_PLLOUT_DIV_SYSPLL1			0x7
+
+/* Qualcomm SC8280XP registers */
+#define SC8280XP_PARF_SYS_CTRL			0x00
+#define  SC8280XP_PARF_SYS_CTRL_MACPHYPWRDNMUX_DIS	(1 << 29)
+#define SC8280XP_PARF_PM_CTRL			0x20
+#define  SC8280XP_PARF_PM_CTRL_REQNENTRL1		(1 << 5)
+#define SC8280XP_PARF_PHY_CTRL			0x40
+#define  SC8280XP_PARF_PHY_CTRL_CLK_DIS			(1 << 0)
+#define SC8280XP_PARF_DBI_BASE_ADDR		0x168
+#define SC8280XP_PARF_MHI_CLOCK_RESET_CTRL	0x174
+#define  SC8280XP_PARF_MHI_CLOCK_RESET_CTRL_EN		(1 << 4)
+#define SC8280XP_PARF_AXI_MSTR_WR_ADDR_HALT	0x178
+#define  SC8280XP_PARF_AXI_MSTR_WR_ADDR_HALT_EN		(1U << 31)
+#define SC8280XP_PARF_LTSSM			0x1b0
+#define  SC8280XP_PARF_LTSSM_EN				(1 << 8)
+#define SC8280XP_PARF_DEVICE_TYPE		0x1000
+#define  SC8280XP_PARF_DEVICE_TYPE_RC			0x4
 
 #define HREAD4(sc, reg)							\
 	(bus_space_read_4((sc)->sc_iot, (sc)->sc_ioh, (reg)))
@@ -1255,7 +1273,69 @@ dwpcie_rk3568_init(struct dwpcie_softc *sc)
 int
 dwpcie_sc8280xp_init(struct dwpcie_softc *sc)
 {
+	uint32_t *perst_gpio;
+	ssize_t perst_gpiolen;
+	int timo;
+
+	/* TODO: verify */
 	sc->sc_num_viewport = 8;
+
+	power_domain_enable(sc->sc_node);
+
+	perst_gpiolen = OF_getproplen(sc->sc_node, "perst-gpios");
+	if (perst_gpiolen <= 0)
+		return ENXIO;
+
+	perst_gpio = malloc(perst_gpiolen, M_TEMP, M_WAITOK);
+	OF_getpropintarray(sc->sc_node, "perst-gpios", perst_gpio,
+	    perst_gpiolen);
+	gpio_controller_config_pin(perst_gpio, GPIO_CONFIG_OUTPUT);
+	gpio_controller_set_pin(perst_gpio, 1);
+	delay(1000);
+
+	regulator_enable(OF_getpropint(sc->sc_node, "vdda-supply", 0));
+	regulator_enable(OF_getpropint(sc->sc_node, "vddpe-3v3-supply", 0));
+	clock_enable_all(sc->sc_node);
+
+	reset_assert_all(sc->sc_node);
+	delay(1000);
+	reset_deassert_all(sc->sc_node);
+	delay(1000);
+
+	HWRITE4(sc, SC8280XP_PARF_DEVICE_TYPE, SC8280XP_PARF_DEVICE_TYPE_RC);
+	HCLR4(sc, SC8280XP_PARF_PHY_CTRL, SC8280XP_PARF_PHY_CTRL_CLK_DIS);
+	HWRITE4(sc, SC8280XP_PARF_DBI_BASE_ADDR, 0);
+	HCLR4(sc, SC8280XP_PARF_SYS_CTRL,
+	    SC8280XP_PARF_SYS_CTRL_MACPHYPWRDNMUX_DIS);
+	HSET4(sc, SC8280XP_PARF_MHI_CLOCK_RESET_CTRL,
+	    SC8280XP_PARF_MHI_CLOCK_RESET_CTRL_EN);
+	HCLR4(sc, SC8280XP_PARF_PM_CTRL, SC8280XP_PARF_PM_CTRL_REQNENTRL1);
+	HSET4(sc, SC8280XP_PARF_AXI_MSTR_WR_ADDR_HALT,
+	    SC8280XP_PARF_AXI_MSTR_WR_ADDR_HALT_EN);
+
+	phy_enable(sc->sc_node, "pciephy");
+
+	dwpcie_link_config(sc);
+
+	HSET4(sc, SC8280XP_PARF_LTSSM, SC8280XP_PARF_LTSSM_EN);
+
+	delay(100 * 1000);
+	gpio_controller_set_pin(perst_gpio, 0);
+	delay(1000);
+
+	free(perst_gpio, M_TEMP, perst_gpiolen);
+
+	for (timo = 20000; timo > 0; timo--) {
+		if (dwpcie_link_up(sc))
+			break;
+		delay(10);
+	}
+	if (timo == 0) {
+		printf("%s:%d: timeout\n", __func__, __LINE__);
+		return ETIMEDOUT;
+	}
+
+	/* TODO: setup SMMU SID mapping */
 
 	return 0;
 }

@@ -631,6 +631,10 @@ device	tascodec
 attach	tascodec at i2c
 file	dev/fdt/tascodec.c		tascodec
 
+device	qcclock: fdt
+attach	qcclock at fdt
+file	dev/fdt/qcclock.c		qcclock
+
 device	qcdwusb: fdt
 attach	qcdwusb at fdt
 file	dev/fdt/qcdwusb.c		qcdwusb

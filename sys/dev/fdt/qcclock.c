@@ -156,16 +156,12 @@ qcclock_attach(struct device *parent, struct device *self, void *aux)
 void
 sc8280xp_enable(void *cookie, uint32_t *cells, int on)
 {
-//	struct qcclock_softc *sc = cookie;
-	uint32_t idx = cells[0];
-
-	printf("%s: 0x%08x %x\n", __func__, idx, on);
+	/* Clocks should already be enabled. */
 }
 
 uint32_t
 sc8280xp_get_frequency(void *cookie, uint32_t *cells)
 {
-//	struct qcclock_softc *sc = cookie;
 	uint32_t idx = cells[0];
 
 	printf("%s: 0x%08x\n", __func__, idx);
@@ -175,11 +171,8 @@ sc8280xp_get_frequency(void *cookie, uint32_t *cells)
 int
 sc8280xp_set_frequency(void *cookie, uint32_t *cells, uint32_t freq)
 {
-//	struct qcclock_softc *sc = cookie;
-	uint32_t idx = cells[0];
-
-	printf("%s: 0x%08x %x\n", __func__, idx, freq);
-	return -1;
+	/* Clocks should be set correctly. */
+	return 0;
 }
 
 int
@@ -187,17 +180,14 @@ sc8280xp_set_parent(void *cookie, uint32_t *cells, uint32_t *pcells)
 {
 	struct qcclock_softc *sc = cookie;
 	uint32_t idx = cells[0];
-	uint32_t pidx;
 
 	if (pcells[0] != sc->sc_phandle) {
 		printf("%s: 0x%08x parent 0x%08x\n", __func__, idx, pcells[0]);
 		return -1;
 	}
 
-	pidx = pcells[1];
-
-	printf("%s: 0x%08x 0x%08x\n", __func__, idx, pidx);
-	return -1;
+	/* Clocks should be set correctly. */
+	return 0;
 }
 
 void

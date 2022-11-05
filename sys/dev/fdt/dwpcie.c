@@ -385,6 +385,26 @@ dwpcie_attach(struct device *parent, struct device *self, void *aux)
 		sc->sc_glue_size = faa->fa_reg[glue].size;
 	}
 
+	if (OF_is_compatible(faa->fa_node, "qcom,pcie-sc8280xp")) {
+		glue = OF_getindex(faa->fa_node, "parf", "reg-names");
+		if (glue < 0 || glue >= faa->fa_nreg) {
+			printf(": no glue registers\n");
+			return;
+		}
+
+		sc->sc_glue_base = faa->fa_reg[glue].addr;
+		sc->sc_glue_size = faa->fa_reg[glue].size;
+
+		ctrl = OF_getindex(faa->fa_node, "dbi", "reg-names");
+		if (ctrl < 0 || ctrl >= faa->fa_nreg) {
+			printf(": no ctrl registers\n");
+			return;
+		}
+
+		sc->sc_ctrl_base = faa->fa_reg[ctrl].addr;
+		sc->sc_ctrl_size = faa->fa_reg[ctrl].size;
+	}
+
 	sc->sc_iot = faa->fa_iot;
 	sc->sc_dmat = faa->fa_dmat;
 	sc->sc_node = faa->fa_node;

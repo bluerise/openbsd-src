@@ -1,0 +1,13 @@
+/* Public Domain */
+
+/*
+ * SC8280XP clocks.
+ */
+
+#define SC8280XP_PCIE_2A_BCR			12
+#define SC8280XP_PCIE_2B_BCR			17
+#define SC8280XP_PCIE_3A_BCR			22
+#define SC8280XP_PCIE_3B_BCR			27
+#define SC8280XP_PCIE_4_BCR			32
+#define SC8280XP_USB30_PRIM_BCR			53
+#define SC8280XP_USB30_SEC_BCR			54

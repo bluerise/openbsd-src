@@ -635,6 +635,10 @@ device	qcdwusb: fdt
 attach	qcdwusb at fdt
 file	dev/fdt/qcdwusb.c		qcdwusb
 
+device	qcclock: fdt
+attach	qcclock at fdt
+file	dev/fdt/qcclock.c		qcclock
+
 # Qualcomm GPIO controller
 attach	qcgpio at fdt with qcgpio_fdt
 file	dev/fdt/qcgpio_fdt.c		qcgpio

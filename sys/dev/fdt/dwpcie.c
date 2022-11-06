@@ -1290,6 +1290,10 @@ dwpcie_sc8280xp_init(struct dwpcie_softc *sc)
 	if (perst_gpiolen <= 0)
 		return ENXIO;
 
+	if (bus_space_map(sc->sc_iot, sc->sc_glue_base,
+	    sc->sc_glue_size, 0, &sc->sc_glue_ioh))
+		return ENOMEM;
+
 	perst_gpio = malloc(perst_gpiolen, M_TEMP, M_WAITOK);
 	OF_getpropintarray(sc->sc_node, "perst-gpios", perst_gpio,
 	    perst_gpiolen);
@@ -1306,16 +1310,35 @@ dwpcie_sc8280xp_init(struct dwpcie_softc *sc)
 	reset_deassert_all(sc->sc_node);
 	delay(1000);
 
-	HWRITE4(sc, SC8280XP_PARF_DEVICE_TYPE, SC8280XP_PARF_DEVICE_TYPE_RC);
-	HCLR4(sc, SC8280XP_PARF_PHY_CTRL, SC8280XP_PARF_PHY_CTRL_CLK_DIS);
-	HWRITE4(sc, SC8280XP_PARF_DBI_BASE_ADDR, 0);
-	HCLR4(sc, SC8280XP_PARF_SYS_CTRL,
-	    SC8280XP_PARF_SYS_CTRL_MACPHYPWRDNMUX_DIS);
-	HSET4(sc, SC8280XP_PARF_MHI_CLOCK_RESET_CTRL,
-	    SC8280XP_PARF_MHI_CLOCK_RESET_CTRL_EN);
-	HCLR4(sc, SC8280XP_PARF_PM_CTRL, SC8280XP_PARF_PM_CTRL_REQNENTRL1);
-	HSET4(sc, SC8280XP_PARF_AXI_MSTR_WR_ADDR_HALT,
-	    SC8280XP_PARF_AXI_MSTR_WR_ADDR_HALT_EN);
+	bus_space_write_4(sc->sc_iot, sc->sc_glue_ioh,
+	    SC8280XP_PARF_DEVICE_TYPE, SC8280XP_PARF_DEVICE_TYPE_RC);
+	reg = bus_space_read_4(sc->sc_iot, sc->sc_glue_ioh,
+	    SC8280XP_PARF_PHY_CTRL);
+	reg &= ~SC8280XP_PARF_PHY_CTRL_CLK_DIS;
+	bus_space_write_4(sc->sc_iot, sc->sc_glue_ioh,
+	    SC8280XP_PARF_PHY_CTRL, reg);
+	bus_space_write_4(sc->sc_iot, sc->sc_glue_ioh,
+	    SC8280XP_PARF_DBI_BASE_ADDR, 0);
+	reg = bus_space_read_4(sc->sc_iot, sc->sc_glue_ioh,
+	    SC8280XP_PARF_SYS_CTRL);
+	reg &= ~SC8280XP_PARF_SYS_CTRL_MACPHYPWRDNMUX_DIS;
+	bus_space_write_4(sc->sc_iot, sc->sc_glue_ioh,
+	    SC8280XP_PARF_SYS_CTRL, reg);
+	reg = bus_space_read_4(sc->sc_iot, sc->sc_glue_ioh,
+	    SC8280XP_PARF_MHI_CLOCK_RESET_CTRL);
+	reg |= SC8280XP_PARF_MHI_CLOCK_RESET_CTRL_EN;
+	bus_space_write_4(sc->sc_iot, sc->sc_glue_ioh,
+	    SC8280XP_PARF_MHI_CLOCK_RESET_CTRL, reg);
+	reg = bus_space_read_4(sc->sc_iot, sc->sc_glue_ioh,
+	    SC8280XP_PARF_PM_CTRL);
+	reg &= ~SC8280XP_PARF_PM_CTRL_REQNENTRL1;
+	bus_space_write_4(sc->sc_iot, sc->sc_glue_ioh,
+	    SC8280XP_PARF_PM_CTRL, reg);
+	reg = bus_space_read_4(sc->sc_iot, sc->sc_glue_ioh,
+	    SC8280XP_PARF_AXI_MSTR_WR_ADDR_HALT);
+	reg |= SC8280XP_PARF_AXI_MSTR_WR_ADDR_HALT_EN;
+	bus_space_write_4(sc->sc_iot, sc->sc_glue_ioh,
+	    SC8280XP_PARF_AXI_MSTR_WR_ADDR_HALT, reg);
 
 	phy_enable(sc->sc_node, "pciephy");
 

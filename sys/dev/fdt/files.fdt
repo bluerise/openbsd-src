@@ -647,6 +647,11 @@ file	dev/fdt/qcgpio_fdt.c		qcgpio
 attach	qciic at fdt with qciic_fdt
 file	dev/fdt/qciic_fdt.c		qciic
 
+# Qualcomm SCM
+device	qcscm
+attach	qcscm at fdt
+file	dev/fdt/qcscm.c			qcscm
+
 # Qualcomm SPMI controller
 device	qcspmi: spmi
 attach	qcspmi at fdt

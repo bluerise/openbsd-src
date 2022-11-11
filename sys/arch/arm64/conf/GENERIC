@@ -317,6 +317,7 @@ qciic*		at acpi?
 qciic*		at fdt?
 iic*		at qciic?
 qcpdc*		at fdt?
+qcscm*		at fdt?
 qcspmi*		at fdt?
 qcpmic*		at qcspmi?
 qcpmicgpio*	at qcpmic?

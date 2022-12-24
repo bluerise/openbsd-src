@@ -37,7 +37,8 @@
 #define	CPU_ID_AA64SMFR0       10
 #define	CPU_ID_AA64ZFR0	       11
 #define	CPU_LIDACTION          12
-#define	CPU_MAXID	       13	/* number of valid machdep ids */
+#define	CPU_KBDRESET	       13
+#define	CPU_MAXID	       14	/* number of valid machdep ids */
 
 #define	CTL_MACHDEP_NAMES { \
 	{ 0, 0 }, \
@@ -52,6 +53,8 @@
 	{ "id_aa64pfr1", CTLTYPE_QUAD }, \
 	{ "id_aa64smfr0", CTLTYPE_QUAD }, \
 	{ "id_aa64zfr0", CTLTYPE_QUAD }, \
+	{ "lidaction", CTLTYPE_INT }, \
+	{ "kbdreset", CTLTYPE_INT }, \
 }
 
 #ifdef _KERNEL

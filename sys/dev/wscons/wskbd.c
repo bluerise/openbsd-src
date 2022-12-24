@@ -262,7 +262,7 @@ const struct cfattach wskbd_ca = {
 	wskbd_detach, wskbd_activate
 };
 
-#if defined(__i386__) || defined(__amd64__)
+#if defined(__i386__) || defined(__amd64__) || defined(__arm64__)
 extern int kbd_reset;
 #endif
 
@@ -1591,7 +1591,7 @@ internal_command(struct wskbd_softc *sc, u_int *type, keysym_t ksym,
 	case KS_Cmd_ResetClose:
 		wsdisplay_reset(sc->sc_displaydv, WSDISPLAY_RESETCLOSE);
 		return (1);
-#if defined(__i386__) || defined(__amd64__)
+#if defined(__i386__) || defined(__amd64__) || defined(__arm64__)
 	case KS_Cmd_KbdReset:
 		switch (kbd_reset) {
 #ifdef DDB

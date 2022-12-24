@@ -72,6 +72,7 @@ void (*powerdownfn)(void);
 
 int cold = 1;
 int lid_action = 0;
+int kbd_reset;
 
 struct vm_map *exec_map = NULL;
 struct vm_map *phys_map = NULL;
@@ -376,6 +377,9 @@ cpu_sysctl(int *name, u_int namelen, void *oldp, size_t *oldlenp, void *newp,
 	case CPU_ID_AA64SMFR0:
 	case CPU_ID_AA64ZFR0:
 		return sysctl_rdquad(oldp, oldlenp, newp, 0);
+	case CPU_KBDRESET:
+		return (sysctl_securelevel_int(oldp, oldlenp, newp, newlen,
+		    &kbd_reset));
 	default:
 		return (sysctl_bounded_arr(cpuctl_vars, nitems(cpuctl_vars),
 		    name, namelen, oldp, oldlenp, newp, newlen));

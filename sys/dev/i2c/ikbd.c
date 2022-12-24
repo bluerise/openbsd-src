@@ -38,6 +38,9 @@ struct ikbd_softc {
 	struct ihidev	sc_hdev;
 	struct hidkbd	sc_kbd;
 	int		sc_spl;
+#ifdef DDB
+	struct timeout	sc_ddb;		/* for entering DDB */
+#endif
 };
 
 void	ikbd_intr(struct ihidev *addr, void *ibuf, u_int len);
@@ -45,13 +48,18 @@ void	ikbd_intr(struct ihidev *addr, void *ibuf, u_int len);
 void	ikbd_cngetc(void *, u_int *, int *);
 void	ikbd_cnpollc(void *, int);
 void	ikbd_cnbell(void *, u_int, u_int, u_int);
+void	ikbd_debugger(void *);
 
 const struct wskbd_consops ikbd_consops = {
 	ikbd_cngetc,
 	ikbd_cnpollc,
 	ikbd_cnbell,
+#ifdef DDB
+	ikbd_debugger,
+#endif
 };
 
+void	ikbd_db_enter(void *);
 int	ikbd_enable(void *, int);
 void	ikbd_set_leds(void *, int);
 int	ikbd_ioctl(void *, u_long, caddr_t, int, struct proc *);
@@ -125,6 +133,10 @@ ikbd_attach(struct device *parent, struct device *self, void *aux)
 	}
 
 	hidkbd_attach_wskbd(kbd, KB_US | KB_DEFAULT, &ikbd_accessops);
+
+#ifdef DDB
+	timeout_set(&sc->sc_ddb, ikbd_db_enter, sc);
+#endif
 }
 
 int
@@ -222,3 +234,25 @@ ikbd_cnbell(void *v, u_int pitch, u_int period, u_int volume)
 {
 	hidkbd_bell(pitch, period, volume, 1);
 }
+
+#ifdef DDB
+void
+ikbd_debugger(void *v)
+{
+	struct ikbd_softc *sc = v;
+
+	/*
+	 * For the console keyboard we can't deliver CTL-ALT-ESC
+	 * from the interrupt routine.  Doing so would start
+	 * polling from inside the interrupt routine and that
+	 * loses bigtime.
+	 */
+	timeout_add(&sc->sc_ddb, 1);
+}
+
+void
+ikbd_db_enter(void *xsc)
+{
+	db_enter();
+}
+#endif

@@ -339,7 +339,7 @@ sdmmc*		at dwmshc?
 qcaoss*		at fdt?
 qccpu*		at fdt?
 qccpucp*	at fdt?
-qcdwusb*	at fdt?
+#qcdwusb*	at fdt?
 qcgpio*		at acpi?
 qcgpio*		at fdt? early 1
 qciic*		at acpi?

@@ -31148,6 +31148,10 @@ static const struct pci_known_product pci_known_products[] = {
 	    "QCNFA765",
 	},
 	{
+	    PCI_VENDOR_QUALCOMM, PCI_PRODUCT_QUALCOMM_WCN7850,
+	    "WCN7850",
+	},
+	{
 	    PCI_VENDOR_QUANCOM, PCI_PRODUCT_QUANCOM_PWDOG1,
 	    "PWDOG1",
 	},

@@ -53,17 +53,18 @@ extern uint32_t	qwx_debug;
 
 struct qwx_softc;
 
-#define ATH11K_EXT_IRQ_GRP_NUM_MAX 11
+#define QWX_EXT_IRQ_GRP_NUM_MAX	11
 
-struct ath11k_hw_ring_mask {
-	uint8_t tx[ATH11K_EXT_IRQ_GRP_NUM_MAX];
-	uint8_t rx_mon_status[ATH11K_EXT_IRQ_GRP_NUM_MAX];
-	uint8_t rx[ATH11K_EXT_IRQ_GRP_NUM_MAX];
-	uint8_t rx_err[ATH11K_EXT_IRQ_GRP_NUM_MAX];
-	uint8_t rx_wbm_rel[ATH11K_EXT_IRQ_GRP_NUM_MAX];
-	uint8_t reo_status[ATH11K_EXT_IRQ_GRP_NUM_MAX];
-	uint8_t rxdma2host[ATH11K_EXT_IRQ_GRP_NUM_MAX];
-	uint8_t host2rxdma[ATH11K_EXT_IRQ_GRP_NUM_MAX];
+struct qwx_hw_ring_mask {
+	uint8_t tx[QWX_EXT_IRQ_GRP_NUM_MAX];
+	uint8_t rx_mon_status[QWX_EXT_IRQ_GRP_NUM_MAX];
+	uint8_t rx[QWX_EXT_IRQ_GRP_NUM_MAX];
+	uint8_t rx_err[QWX_EXT_IRQ_GRP_NUM_MAX];
+	uint8_t rx_wbm_rel[QWX_EXT_IRQ_GRP_NUM_MAX];
+	uint8_t reo_status[QWX_EXT_IRQ_GRP_NUM_MAX];
+	uint8_t rxdma2host[QWX_EXT_IRQ_GRP_NUM_MAX];
+	uint8_t host2rxdma[QWX_EXT_IRQ_GRP_NUM_MAX];
+	uint8_t	tx_mon_dest[QWX_EXT_IRQ_GRP_NUM_MAX];
 };
 
 #define ATH11K_FW_DIR			"qwx"
@@ -78,7 +79,7 @@ struct ath11k_hw_ring_mask {
 
 #define QWX_FW_BUILD_ID_MASK "QC_IMAGE_VERSION_STRING="
 
-struct ath11k_hw_tcl2wbm_rbm_map {
+struct qwx_hw_tcl2wbm_rbm_map {
 	uint8_t tcl_ring_num;
 	uint8_t wbm_ring_num;
 	uint8_t rbm_id;
@@ -88,29 +89,36 @@ struct ath11k_hw_tcl2wbm_rbm_map {
  * enum hal_rx_buf_return_buf_manager
  *
  * @HAL_RX_BUF_RBM_WBM_IDLE_BUF_LIST: Buffer returned to WBM idle buffer list
- * @HAL_RX_BUF_RBM_WBM_IDLE_DESC_LIST: Descriptor returned to WBM idle
- *	descriptor list.
+ * @HAL_RX_BUF_RBM_WBM_CHIP0_IDLE_DESC_LIST: Descriptor returned to WBM idle
+ * 	descriptor list, where the chip 0 WBM is chosen in case of a
+ *  	multi-chip config
  * @HAL_RX_BUF_RBM_FW_BM: Buffer returned to FW
  * @HAL_RX_BUF_RBM_SW0_BM: For Tx completion -- returned to host
  * @HAL_RX_BUF_RBM_SW1_BM: For Tx completion -- returned to host
  * @HAL_RX_BUF_RBM_SW2_BM: For Tx completion -- returned to host
  * @HAL_RX_BUF_RBM_SW3_BM: For Rx release -- returned to host
+ * @HAL_RX_BUF_RBM_SW4_BM: For Tx completion -- returned to host
+ * @HAL_RX_BUF_RBM_SW5_BM: For ring 5 -- returned to host
+ * @HAL_RX_BUF_RBM_SW6_BM: For ring 6 -- returned to host
  */
 
 enum hal_rx_buf_return_buf_manager {
 	HAL_RX_BUF_RBM_WBM_IDLE_BUF_LIST,
-	HAL_RX_BUF_RBM_WBM_IDLE_DESC_LIST,
+	HAL_RX_BUF_RBM_WBM_CHIP0_IDLE_DESC_LIST,
 	HAL_RX_BUF_RBM_FW_BM,
 	HAL_RX_BUF_RBM_SW0_BM,
 	HAL_RX_BUF_RBM_SW1_BM,
 	HAL_RX_BUF_RBM_SW2_BM,
 	HAL_RX_BUF_RBM_SW3_BM,
 	HAL_RX_BUF_RBM_SW4_BM,
+	HAL_RX_BUF_RBM_SW5_BM,
+	HAL_RX_BUF_RBM_SW6_BM,
 };
 
-struct ath11k_hw_hal_params {
+struct qwx_hw_hal_params {
 	enum hal_rx_buf_return_buf_manager rx_buf_rbm;
-	const struct ath11k_hw_tcl2wbm_rbm_map *tcl2wbm_rbm_map;
+	const struct qwx_hw_tcl2wbm_rbm_map *tcl2wbm_rbm_map;
+	uint32_t wbm2sw_cc_enable;
 };
 
 struct hal_tx_info {
@@ -160,7 +168,14 @@ struct hal_tx_status {
 	uint32_t rate_stats;
 };
 
-struct ath11k_hw_params {
+struct hal_ops {
+	int (*create_srng_config)(struct qwx_softc *);
+};
+
+extern const struct hal_ops hal_qca6390_ops;
+extern const struct hal_ops hal_wcn7850_ops;
+
+struct qwx_hw_params {
 	const char *name;
 	uint16_t hw_rev;
 	uint8_t max_radios;
@@ -173,11 +188,11 @@ struct ath11k_hw_params {
 	} fw;
 
 	const struct ath11k_hw_ops *hw_ops;
-	const struct ath11k_hw_ring_mask *ring_mask;
+	const struct qwx_hw_ring_mask *ring_mask;
 
 	bool internal_sleep_clock;
 
-	const struct ath11k_hw_regs *regs;
+	const struct qwx_hw_regs *regs;
 	uint32_t qmi_service_ins_id;
 	const struct ce_attr *host_ce_config;
 	uint32_t ce_count;
@@ -221,7 +236,8 @@ struct ath11k_hw_params {
 	bool fix_l1ss;
 	bool credit_flow;
 	uint8_t max_tx_ring;
-	const struct ath11k_hw_hal_params *hal_params;
+	const struct qwx_hw_hal_params *hal_params;
+	const struct hal_ops *hal_ops;
 #if notyet
 	bool supports_dynamic_smps_6ghz;
 	bool alloc_cacheable_memory;
@@ -237,7 +253,6 @@ struct ath11k_hw_params {
 	bool m3_fw_support;
 	bool fixed_bdf_addr;
 	bool fixed_mem_region;
-	bool static_window_map;
 	bool hybrid_bus_type;
 	bool fixed_fw_mem;
 #if notyet
@@ -259,8 +274,8 @@ struct ath11k_hw_ops {
 	uint8_t (*get_hw_mac_from_pdev_id)(int pdev_id);
 	void (*wmi_init_config)(struct qwx_softc *sc,
 	    struct target_resource_config *config);
-	int (*mac_id_to_pdev_id)(struct ath11k_hw_params *hw, int mac_id);
-	int (*mac_id_to_srng_id)(struct ath11k_hw_params *hw, int mac_id);
+	int (*mac_id_to_pdev_id)(struct qwx_hw_params *hw, int mac_id);
+	int (*mac_id_to_srng_id)(struct qwx_hw_params *hw, int mac_id);
 #if notyet
 	void (*tx_mesh_enable)(struct ath11k_base *ab,
 			       struct hal_tcl_data_cmd *tcl_cmd);
@@ -319,12 +334,13 @@ extern const struct ath11k_hw_ops qcn9074_ops;
 extern const struct ath11k_hw_ops wcn6855_ops;
 extern const struct ath11k_hw_ops wcn6750_ops;
 
-extern const struct ath11k_hw_ring_mask ath11k_hw_ring_mask_ipq8074;
-extern const struct ath11k_hw_ring_mask ath11k_hw_ring_mask_qca6390;
-extern const struct ath11k_hw_ring_mask ath11k_hw_ring_mask_qcn9074;
-extern const struct ath11k_hw_ring_mask ath11k_hw_ring_mask_wcn6750;
+extern const struct qwx_hw_ring_mask qwx_hw_ring_mask_ipq8074;
+extern const struct qwx_hw_ring_mask qwx_hw_ring_mask_qca6390;
+extern const struct qwx_hw_ring_mask qwx_hw_ring_mask_qcn9074;
+extern const struct qwx_hw_ring_mask qwx_hw_ring_mask_wcn6750;
+extern const struct qwx_hw_ring_mask qwx_hw_ring_mask_wcn7850;
 
-struct ath11k_hw_regs {
+struct qwx_hw_regs {
 	uint32_t hal_tcl1_ring_base_lsb;
 	uint32_t hal_tcl1_ring_base_msb;
 	uint32_t hal_tcl1_ring_id;
@@ -338,8 +354,10 @@ struct ath11k_hw_regs {
 	uint32_t hal_tcl1_ring_msi1_data;
 	uint32_t hal_tcl2_ring_base_lsb;
 	uint32_t hal_tcl_ring_base_lsb;
+	uint32_t hal_tcl_ring_hp;
 
 	uint32_t hal_tcl_status_ring_base_lsb;
+	uint32_t hal_tcl_status_ring_hp;
 
 	uint32_t hal_reo1_ring_base_lsb;
 	uint32_t hal_reo1_ring_base_msb;
@@ -373,49 +391,76 @@ struct ath11k_hw_regs {
 	uint32_t hal_sw2reo_ring_base_lsb;
 	uint32_t hal_sw2reo_ring_hp;
 
-	uint32_t hal_seq_wcss_umac_ce0_src_reg;
 	uint32_t hal_seq_wcss_umac_ce0_dst_reg;
 	uint32_t hal_seq_wcss_umac_ce1_src_reg;
 	uint32_t hal_seq_wcss_umac_ce1_dst_reg;
 
 	uint32_t hal_wbm_idle_link_ring_base_lsb;
 	uint32_t hal_wbm_idle_link_ring_misc;
+	uint32_t hal_wbm_idle_link_ring_up;
+	uint32_t hal_wbm_r0_idle_list_cntl_addr;
+	uint32_t hal_wbm_r0_idle_list_size_addr;
+	uint32_t hal_wbm_scattered_ring_base_lsb;
+	uint32_t hal_wbm_scattered_ring_base_msb;
+	uint32_t hal_wbm_scattered_desc_head_info_ix0;
+	uint32_t hal_wbm_scattered_desc_head_info_ix1;
+	uint32_t hal_wbm_scattered_desc_tail_info_ix0;
+	uint32_t hal_wbm_scattered_desc_tail_info_ix1;
+	uint32_t hal_wbm_scattered_desc_ptr_hp_addr;
 
 	uint32_t hal_wbm_release_ring_base_lsb;
+	uint32_t hal_wbm_release_ring_hp;
+	uint32_t hal_wbm_sw1_release_ring_base_lsb;
 
 	uint32_t hal_wbm0_release_ring_base_lsb;
+	uint32_t hal_wbm0_release_ring_hp;
 	uint32_t hal_wbm1_release_ring_base_lsb;
+	uint32_t hal_wbm1_release_ring_hp;
 
 	uint32_t pcie_qserdes_sysclk_en_sel;
 	uint32_t pcie_pcs_osc_dtct_config_base;
 
+	uint32_t hal_ppe_rel_ring_base;
+
 	uint32_t hal_shadow_base_addr;
 	uint32_t hal_reo1_misc_ctl;
+	uint32_t hal_reo1_sw_cookie_cfg0;
+	uint32_t hal_reo1_sw_cookie_cfg1;
+	uint32_t hal_reo1_qdesc_lut_base0;
+	uint32_t hal_reo1_qdesc_lut_base1;
+	uint32_t hal_reo1_aging_thres_ix0;
+	uint32_t hal_reo1_aging_thres_ix1;
+	uint32_t hal_reo1_aging_thres_ix2;
+	uint32_t hal_reo1_aging_thres_ix3;
+
+	uint32_t hal_reo2_sw0_ring_base;
+	uint32_t hal_sw2reo1_ring_base;
 };
 
-extern const struct ath11k_hw_regs ipq8074_regs;
-extern const struct ath11k_hw_regs qca6390_regs;
-extern const struct ath11k_hw_regs qcn9074_regs;
-extern const struct ath11k_hw_regs wcn6855_regs;
-extern const struct ath11k_hw_regs wcn6750_regs;
+extern const struct qwx_hw_regs ipq8074_regs;
+extern const struct qwx_hw_regs qca6390_regs;
+extern const struct qwx_hw_regs qcn9074_regs;
+extern const struct qwx_hw_regs wcn6855_regs;
+extern const struct qwx_hw_regs wcn6750_regs;
+extern const struct qwx_hw_regs wcn7850_regs;
 
-enum ath11k_dev_flags {
-	ATH11K_CAC_RUNNING,
-	ATH11K_FLAG_CORE_REGISTERED,
-	ATH11K_FLAG_CRASH_FLUSH,
-	ATH11K_FLAG_RAW_MODE,
-	ATH11K_FLAG_HW_CRYPTO_DISABLED,
-	ATH11K_FLAG_BTCOEX,
-	ATH11K_FLAG_RECOVERY,
-	ATH11K_FLAG_UNREGISTERING,
-	ATH11K_FLAG_REGISTERED,
-	ATH11K_FLAG_QMI_FAIL,
-	ATH11K_FLAG_HTC_SUSPEND_COMPLETE,
-	ATH11K_FLAG_CE_IRQ_ENABLED,
-	ATH11K_FLAG_EXT_IRQ_ENABLED,
-	ATH11K_FLAG_FIXED_MEM_RGN,
-	ATH11K_FLAG_DEVICE_INIT_DONE,
-	ATH11K_FLAG_MULTI_MSI_VECTORS,
+enum qwx_dev_flags {
+	QWX_CAC_RUNNING,
+	QWX_FLAG_CORE_REGISTERED,
+	QWX_FLAG_CRASH_FLUSH,
+	QWX_FLAG_RAW_MODE,
+	QWX_FLAG_HW_CRYPTO_DISABLED,
+	QWX_FLAG_BTCOEX,
+	QWX_FLAG_RECOVERY,
+	QWX_FLAG_UNREGISTERING,
+	QWX_FLAG_REGISTERED,
+	QWX_FLAG_QMI_FAIL,
+	QWX_FLAG_HTC_SUSPEND_COMPLETE,
+	QWX_FLAG_CE_IRQ_ENABLED,
+	QWX_FLAG_EXT_IRQ_ENABLED,
+	QWX_FLAG_FIXED_MEM_RGN,
+	QWX_FLAG_DEVICE_INIT_DONE,
+	QWX_FLAG_MULTI_MSI_VECTORS,
 };
 
 enum ath11k_scan_state {
@@ -647,7 +692,17 @@ enum hal_ring_type {
 	HAL_RXDMA_MONITOR_DST,
 	HAL_RXDMA_MONITOR_DESC,
 	HAL_RXDMA_DIR_BUF,
+	HAL_PPE2TCL,
+	HAL_PPE_RELEASE,
+	HAL_TX_MONITOR_BUF,
+	HAL_TX_MONITOR_DST,
 	HAL_MAX_RING_TYPES,
+};
+
+enum hal_srng_mac_type {
+	ATH12K_HAL_SRNG_UMAC,
+	ATH12K_HAL_SRNG_DMAC,
+	ATH12K_HAL_SRNG_PMAC
 };
 
 /* HW SRNG configuration table */
@@ -658,6 +713,7 @@ struct hal_srng_config {
 	uint32_t reg_start[HAL_SRNG_NUM_REG_GRP];
 	uint16_t reg_size[HAL_SRNG_NUM_REG_GRP];
 	uint8_t lmac_ring;
+	enum hal_srng_mac_type mac_type;
 	enum hal_srng_dir ring_dir;
 	uint32_t max_size;
 };
@@ -761,13 +817,13 @@ struct hal_reo_status {
 /* HAL context to be used to access SRNG APIs (currently used by data path
  * and transport (CE) modules)
  */
-struct ath11k_hal {
+struct qwx_hal {
 	/* HAL internal state for all SRNG rings.
 	 */
-	struct hal_srng srng_list[HAL_SRNG_RING_ID_MAX];
+	struct hal_srng srng_list[ATH12K_HAL_SRNG_RING_ID_MAX];
 
 	/* SRNG configuration table */
-	struct hal_srng_config srng_config[QWX_NUM_SRNG_CFG];
+	struct hal_srng_config *srng_config;
 
 	/* Remote pointer memory for HW/FW updates */
 	struct qwx_dmamem *rdpmem;
@@ -837,7 +893,6 @@ struct ce_attr {
 	unsigned int dest_nentries;
 
 	void (*recv_cb)(struct qwx_softc *, struct mbuf *);
-	void (*send_cb)(struct qwx_softc *, struct mbuf *);
 };
 
 #define CE_DESC_RING_ALIGN 8
@@ -912,7 +967,7 @@ struct qwx_ce_ring {
 	uint32_t hal_ring_id;
 
 	/*
-	 * Per-transfer data. 
+	 * Per-transfer data.
 	 * Size and type of this data depends on how the ring is used.
 	 *
 	 * For transfers using DMA, the context contains pointers to
@@ -1143,7 +1198,7 @@ struct qwx_ce_pipe {
 	unsigned int buf_sz;
 	unsigned int rx_buf_needed;
 
-	void (*send_cb)(struct qwx_softc *, struct mbuf *);
+	int (*send_cb)(struct qwx_ce_pipe *pipe);
 	void (*recv_cb)(struct qwx_softc *, struct mbuf *);
 
 #ifdef notyet
@@ -1182,18 +1237,18 @@ struct qwx_qmi_target_info {
 	uint32_t soc_id;
 	uint32_t fw_version;
 	uint32_t eeprom_caldata;
-	char fw_build_timestamp[ATH11K_QMI_WLANFW_MAX_TIMESTAMP_LEN_V01 + 1];
+	char fw_build_timestamp[QWX_QMI_WLANFW_MAX_TIMESTAMP_LEN_V01 + 1];
 	char fw_build_id[ATH11K_QMI_WLANFW_MAX_BUILD_ID_LEN_V01 + 1];
 	char bdf_ext[ATH11K_QMI_BDF_EXT_STR_LENGTH];
 };
 
-enum ath11k_bdf_search {
-	ATH11K_BDF_SEARCH_DEFAULT,
-	ATH11K_BDF_SEARCH_BUS_AND_BOARD,
+enum qwx_bdf_search {
+	QWX_BDF_SEARCH_DEFAULT,
+	QWX_BDF_SEARCH_BUS_AND_BOARD,
 };
 
 struct qwx_device_id {
-	enum ath11k_bdf_search bdf_search;
+	enum qwx_bdf_search bdf_search;
 	uint32_t vendor;
 	uint32_t device;
 	uint32_t subsystem_vendor;
@@ -1335,7 +1390,7 @@ struct qwx_htc_svc_conn_resp {
 struct qwx_htc_ep {
 	struct qwx_htc *htc;
 	enum ath11k_htc_ep_id eid;
-	enum ath11k_htc_svc_id service_id;
+	enum qwx_htc_svc_id service_id;
 	struct qwx_htc_ep_ops ep_ops;
 
 	int max_tx_queue_depth;
@@ -1720,11 +1775,11 @@ struct qwx_survey_info {
 };
 
 #define ATH11K_IRQ_NUM_MAX 52
-#define ATH11K_EXT_IRQ_NUM_MAX	16
+#define QWX_EXT_IRQ_NUM_MAX	16
 
 struct qwx_ext_irq_grp {
 	struct qwx_softc *sc;
-	uint32_t irqs[ATH11K_EXT_IRQ_NUM_MAX];
+	uint32_t irqs[QWX_EXT_IRQ_NUM_MAX];
 	uint32_t num_irq;
 	uint32_t grp_id;
 	uint64_t timestamp;
@@ -1821,8 +1876,8 @@ struct qwx_softc {
 #define	QWX_MGMT_QUEUE_ID	31
 
 	bus_addr_t			mem;
-	struct ath11k_hw_params		hw_params;
-	struct ath11k_hal		hal;
+	struct qwx_hw_params		hw_params;
+	struct qwx_hal			hal;
 	struct qwx_ce			ce;
 	struct qwx_dp			dp;
 	struct qwx_pdev_dp		pdev_dp;
@@ -1833,7 +1888,7 @@ struct qwx_softc {
 	enum ath11k_crypt_mode		crypto_mode;
 	enum ath11k_hw_txrx_mode	frame_mode;
 
-	struct qwx_ext_irq_grp		ext_irq_grp[ATH11K_EXT_IRQ_GRP_NUM_MAX];
+	struct qwx_ext_irq_grp		ext_irq_grp[QWX_EXT_IRQ_GRP_NUM_MAX];
 
 	uint16_t			qmi_txn_id;
 	int				qmi_cal_done;
@@ -1900,7 +1955,9 @@ struct qwx_softc {
 	/* Provided by attachment driver: */
 	struct qwx_ops			ops;
 	bus_dma_tag_t			sc_dmat;
-	enum ath11k_hw_rev		sc_hw_rev;
+	enum qwx_hw_rev			sc_hw_rev;
+	uint32_t			hal_seq_wcss_umac_ce0_src_reg;
+	int				static_window_map;
 	struct qwx_device_id		id;
 	char				sc_bus_str[4]; /* "pci" or "ahb" */
 	int				num_msivec;

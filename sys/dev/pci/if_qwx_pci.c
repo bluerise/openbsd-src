@@ -96,7 +96,7 @@
 #include <dev/ic/qwxreg.h>
 #include <dev/ic/qwxvar.h>
 
-#ifdef QWX_DEBUG 
+#ifdef QWX_DEBUG
 /* Headers needed for RDDM dump */
 #include <sys/namei.h>
 #include <sys/pledge.h>
@@ -106,23 +106,28 @@
 #include <sys/proc.h>
 #endif
 
-#define ATH11K_PCI_IRQ_CE0_OFFSET	3
+#define QWX_PCI_IRQ_CE0_OFFSET		3
 #define ATH11K_PCI_IRQ_DP_OFFSET	14
 
 #define ATH11K_PCI_CE_WAKE_IRQ		2
 
-#define ATH11K_PCI_WINDOW_ENABLE_BIT	0x40000000
-#define ATH11K_PCI_WINDOW_REG_ADDRESS	0x310c
-#define ATH11K_PCI_WINDOW_VALUE_MASK	GENMASK(24, 19)
-#define ATH11K_PCI_WINDOW_START		0x80000
-#define ATH11K_PCI_WINDOW_RANGE_MASK	GENMASK(18, 0)
+#define QWX_PCI_WINDOW_ENABLE_BIT	0x40000000
+#define QWX_PCI_WINDOW_REG_ADDRESS	0x310c
+#define QWX_PCI_WINDOW_VALUE_M		0x01f80000
+#define QWX_PCI_WINDOW_VALUE_S		19
+#define QWX_PCI_WINDOW_START		0x80000
+#define QWX_PCI_WINDOW_RANGE_MASK	0x0007ffff
+#define QWX_PCI_WINDOW_STATIC_MASK	GENMASK(31, 6)
 
 /* BAR0 + 4k is always accessible, and no need to force wakeup. */
-#define ATH11K_PCI_ACCESS_ALWAYS_OFF	0xFE0	/* 4K - 32 = 0xFE0 */
+#define QWX_PCI_ACCESS_ALWAYS_OFF	0xFE0	/* 4K - 32 = 0xFE0 */
 
+#define ATH12K_TCSR_SOC_HW_VERSION	0x1b00000
 #define TCSR_SOC_HW_VERSION		0x0224
-#define TCSR_SOC_HW_VERSION_MAJOR_MASK	GENMASK(11, 8)
-#define TCSR_SOC_HW_VERSION_MINOR_MASK	GENMASK(7, 0)
+#define TCSR_SOC_HW_VERSION_MAJOR_M	0x00000f00
+#define TCSR_SOC_HW_VERSION_MAJOR_S	8
+#define TCSR_SOC_HW_VERSION_MINOR_M	0x000000ff
+#define TCSR_SOC_HW_VERSION_MINOR_S	0
 
 /*
  * pci.h
@@ -130,7 +135,7 @@
 #define PCIE_SOC_GLOBAL_RESET			0x3008
 #define PCIE_SOC_GLOBAL_RESET_V			1
 
-#define WLAON_WARM_SW_ENTRY			0x1f80504
+#define WLAON_WARM_SW_ENTRY			0x01f80504
 #define WLAON_SOC_RESET_CAUSE_REG		0x01f8060c
 
 #define PCIE_Q6_COOKIE_ADDR			0x01f80500
@@ -145,6 +150,7 @@
 #define PCIE_PCIE_PARF_LTSSM			0x1e081b0
 #define PARM_LTSSM_VALUE			0x111
 
+#define ATH12K_GCC_GCC_PCIE_HOT_RST		0x1e38338
 #define GCC_GCC_PCIE_HOT_RST			0x1e402bc
 #define GCC_GCC_PCIE_HOT_RST_VAL		0x10
 
@@ -169,6 +175,9 @@
 
 #define WLAON_QFPROM_PWR_CTRL_REG		0x01f8031c
 #define QFPROM_PWR_CTRL_VDD4BLOW_MASK		0x4
+
+#define PCI_MHIREGLEN_REG			0x1e0e100
+#define PCI_MHI_REGION_END			0x1e0effc
 
 /*
  * mhi.h
@@ -333,7 +342,7 @@ struct qwx_pci_softc {
 	pcireg_t		sc_msi_cap;
 	void			*sc_ih[QWX_NUM_MSI_VEC];
 	char			sc_ivname[QWX_NUM_MSI_VEC][16];
-	struct qwx_ext_irq_grp	ext_irq_grp[ATH11K_EXT_IRQ_GRP_NUM_MAX];
+	struct qwx_ext_irq_grp	ext_irq_grp[QWX_EXT_IRQ_GRP_NUM_MAX];
 	int			mhi_irq[2];
 	bus_space_tag_t		sc_st;
 	bus_space_handle_t	sc_sh;
@@ -342,7 +351,7 @@ struct qwx_pci_softc {
 
 	pcireg_t		sc_lcsr;
 	uint32_t		sc_flags;
-#define ATH11K_PCI_ASPM_RESTORE	1
+#define QWX_PCI_ASPM_RESTORE	0x1
 
 	uint32_t		register_window;
 	const struct qwx_pci_ops *sc_pci_ops;
@@ -374,11 +383,9 @@ struct qwx_pci_softc {
 	struct qwx_dmamem	*cmd_ctxt;
 
 
-	struct qwx_pci_xfer_ring xfer_rings[4];
-#define QWX_PCI_XFER_RING_LOOPBACK_OUTBOUND	0
-#define QWX_PCI_XFER_RING_LOOPBACK_INBOUND	1
-#define QWX_PCI_XFER_RING_IPCR_OUTBOUND		2
-#define QWX_PCI_XFER_RING_IPCR_INBOUND		3
+	struct qwx_pci_xfer_ring xfer_rings[2];
+#define QWX_PCI_XFER_RING_IPCR_OUTBOUND		0
+#define QWX_PCI_XFER_RING_IPCR_INBOUND		1
 	struct qwx_pci_event_ring event_rings[QWX_NUM_EVENT_CTX];
 	struct qwx_pci_cmd_ring cmd_ring;
 };
@@ -504,6 +511,14 @@ static const struct qwx_pci_ops qwx_pci_ops_qcn9074 = {
 	.alloc_xfer_rings = qwx_pci_alloc_xfer_rings_qcn9074,
 };
 
+static const struct qwx_pci_ops qwx_pci_ops_wcn7850 = {
+	.wakeup = qwx_pci_bus_wake_up,
+	.release = qwx_pci_bus_release,
+	.window_write32 = qwx_pci_window_write32,
+	.window_read32 = qwx_pci_window_read32,
+	.alloc_xfer_rings = qwx_pci_alloc_xfer_rings_qca6390,
+};
+
 const struct cfattach qwx_pci_ca = {
 	sizeof(struct qwx_pci_softc),
 	qwx_pci_match,
@@ -521,7 +536,8 @@ static const struct pci_matchid qwx_pci_devices[] = {
 	{ PCI_VENDOR_QUALCOMM, PCI_PRODUCT_QUALCOMM_QCA6390 },
 	{ PCI_VENDOR_QUALCOMM, PCI_PRODUCT_QUALCOMM_QCN9074 },
 #endif
-	{ PCI_VENDOR_QUALCOMM, PCI_PRODUCT_QUALCOMM_QCNFA765 }
+	{ PCI_VENDOR_QUALCOMM, PCI_PRODUCT_QUALCOMM_QCNFA765 },
+	{ PCI_VENDOR_QUALCOMM, PCI_PRODUCT_QUALCOMM_WCN7850 }
 };
 
 int
@@ -603,6 +619,16 @@ const struct qwx_msi_config qwx_msi_config[] = {
 		},
 		.hw_rev = ATH11K_HW_WCN6750_HW10,
 	},
+	{
+		.total_vectors = 16,
+		.total_users = 3,
+		.users = (struct qwx_msi_user[]) {
+			{ .name = "MHI", .num_vectors = 3, .base_vector = 0 },
+			{ .name = "CE", .num_vectors = 5, .base_vector = 3 },
+			{ .name = "DP", .num_vectors = 8, .base_vector = 8 },
+		},
+		.hw_rev = ATH12K_HW_WCN7850_HW20,
+	},
 };
 
 int
@@ -611,7 +637,7 @@ qwx_pcic_init_msi_config(struct qwx_softc *sc)
 	const struct qwx_msi_config *msi_config;
 	int i;
 
-	if (!test_bit(ATH11K_FLAG_MULTI_MSI_VECTORS, sc->sc_flags)) {
+	if (!test_bit(QWX_FLAG_MULTI_MSI_VECTORS, sc->sc_flags)) {
 		sc->msi_cfg = &qwx_msi_config_one_msi;
 		return 0;
 	}
@@ -745,7 +771,6 @@ qwx_pci_attach(struct device *parent, struct device *self, void *aux)
 	struct ieee80211com *ic = &sc->sc_ic;
 	struct ifnet *ifp = &ic->ic_if;
 	uint32_t soc_hw_version_major, soc_hw_version_minor;
-	const struct qwx_pci_ops *pci_ops;
 	struct pci_attach_args *pa = aux;
 	pci_intr_handle_t ih;
 	pcireg_t memtype, reg;
@@ -764,7 +789,7 @@ qwx_pci_attach(struct device *parent, struct device *self, void *aux)
 	rw_init(&sc->ioctl_rwl, "qwxioctl");
 
 	sreg = pci_conf_read(psc->sc_pc, psc->sc_tag, PCI_SUBSYS_ID_REG);
-	sc->id.bdf_search = ATH11K_BDF_SEARCH_DEFAULT;
+	sc->id.bdf_search = QWX_BDF_SEARCH_DEFAULT;
 	sc->id.vendor = PCI_VENDOR(pa->pa_id);
 	sc->id.device = PCI_PRODUCT(pa->pa_id);
 	sc->id.subsystem_vendor = PCI_VENDOR(sreg);
@@ -816,14 +841,14 @@ qwx_pci_attach(struct device *parent, struct device *self, void *aux)
 			printf(": can't map interrupt\n");
 			return;
 		}
-		clear_bit(ATH11K_FLAG_MULTI_MSI_VECTORS, sc->sc_flags);
+		clear_bit(QWX_FLAG_MULTI_MSI_VECTORS, sc->sc_flags);
 	} else {
 		if (pci_intr_map_msivec(pa, 0, &ih) != 0 &&
 		    pci_intr_map_msi(pa, &ih) != 0) {
 			printf(": can't map interrupt\n");
 			return;
 		}
-		set_bit(ATH11K_FLAG_MULTI_MSI_VECTORS, sc->sc_flags);
+		set_bit(QWX_FLAG_MULTI_MSI_VECTORS, sc->sc_flags);
 		psc->mhi_irq[MHI_ER_CTRL] = 1;
 		psc->mhi_irq[MHI_ER_DATA] = 2;
 	}
@@ -842,7 +867,7 @@ qwx_pci_attach(struct device *parent, struct device *self, void *aux)
 	}
 	printf(": %s\n", intrstr);
 
-	if (test_bit(ATH11K_FLAG_MULTI_MSI_VECTORS, sc->sc_flags)) {
+	if (test_bit(QWX_FLAG_MULTI_MSI_VECTORS, sc->sc_flags)) {
 		int msivec;
 
 		msivec = psc->mhi_irq[MHI_ER_CTRL];
@@ -886,6 +911,9 @@ qwx_pci_attach(struct device *parent, struct device *self, void *aux)
 
 	switch (PCI_PRODUCT(pa->pa_id)) {
 	case PCI_PRODUCT_QUALCOMM_QCA6390:
+		sc->static_window_map = 0;
+		sc->hal_seq_wcss_umac_ce0_src_reg = 0x00a00000;
+		psc->sc_pci_ops = &qwx_pci_ops_qca6390;
 		qwx_pci_read_hw_version(sc, &soc_hw_version_major,
 		    &soc_hw_version_minor);
 		switch (soc_hw_version_major) {
@@ -898,16 +926,20 @@ qwx_pci_attach(struct device *parent, struct device *self, void *aux)
 			return;
 		}
 
-		pci_ops = &qwx_pci_ops_qca6390;
 		psc->max_chan = QWX_MHI_CONFIG_QCA6390_MAX_CHANNELS;
 		break;
 	case PCI_PRODUCT_QUALCOMM_QCN9074:
-		pci_ops = &qwx_pci_ops_qcn9074;
+		sc->static_window_map = 1;
+		sc->hal_seq_wcss_umac_ce0_src_reg = 0x01b80000;
+		psc->sc_pci_ops = &qwx_pci_ops_qcn9074;
 		sc->sc_hw_rev = ATH11K_HW_QCN9074_HW10;
 		psc->max_chan = QWX_MHI_CONFIG_QCA9074_MAX_CHANNELS;
 		break;
 	case PCI_PRODUCT_QUALCOMM_QCNFA765:
-		sc->id.bdf_search = ATH11K_BDF_SEARCH_BUS_AND_BOARD;
+		sc->static_window_map = 0;
+		sc->hal_seq_wcss_umac_ce0_src_reg = 0x01b80000;
+		psc->sc_pci_ops = &qwx_pci_ops_qca6390;
+		sc->id.bdf_search = QWX_BDF_SEARCH_BUS_AND_BOARD;
 		qwx_pci_read_hw_version(sc, &soc_hw_version_major,
 		    &soc_hw_version_minor);
 		switch (soc_hw_version_major) {
@@ -932,16 +964,31 @@ unsupported_wcn6855_soc:
 			return;
 		}
 
-		pci_ops = &qwx_pci_ops_qca6390;
+		psc->max_chan = QWX_MHI_CONFIG_QCA6390_MAX_CHANNELS;
+		break;
+	case PCI_PRODUCT_QUALCOMM_WCN7850:
+		sc->static_window_map = 0;
+		sc->hal_seq_wcss_umac_ce0_src_reg = 0x01b80000;
+		psc->sc_pci_ops = &qwx_pci_ops_wcn7850;
+		sc->id.bdf_search = QWX_BDF_SEARCH_BUS_AND_BOARD;
+		qwx_pci_read_hw_version(sc, &soc_hw_version_major,
+		    &soc_hw_version_minor);
+		switch (soc_hw_version_major) {
+		case 2:
+			sc->sc_hw_rev = ATH12K_HW_WCN7850_HW20;
+			break;
+		default:
+			printf(": unknown hardware version found for WCN785: "
+			    "%d\n", soc_hw_version_major);
+			return;
+		}
+
 		psc->max_chan = QWX_MHI_CONFIG_QCA6390_MAX_CHANNELS;
 		break;
 	default:
 		printf(": unsupported chip\n");
 		return;
 	}
-
-	/* register PCI ops */
-	psc->sc_pci_ops = pci_ops;
 
 	error = qwx_pcic_init_msi_config(sc);
 	if (error)
@@ -1020,7 +1067,8 @@ unsupported_wcn6855_soc:
 	if (sc->sc_nswq == NULL)
 		goto err_ce_free;
 
-	qwx_pci_init_qmi_ce_config(sc);
+	if (!QWX_IS_ATH12K(sc))
+		qwx_pci_init_qmi_ce_config(sc);
 
 	error = qwx_pcic_config_irq(sc, pa);
 	if (error) {
@@ -1227,7 +1275,7 @@ qwx_pci_alloc_xfer_ring(struct qwx_softc *sc, struct qwx_pci_xfer_ring *ring,
 	memset(ring->data, 0, sizeof(ring->data));
 	for (i = 0; i < ring->num_elements; i++) {
 		struct qwx_xfer_data *xfer = &ring->data[i];
-		
+
 		err = bus_dmamap_create(sc->sc_dmat, QWX_PCI_XFER_MAX_DATA_SIZE,
 		    1, QWX_PCI_XFER_MAX_DATA_SIZE, 0, BUS_DMA_NOWAIT,
 		    &xfer->map);
@@ -1297,18 +1345,6 @@ qwx_pci_alloc_xfer_rings_qca6390(struct qwx_pci_softc *psc)
 	int ret;
 
 	ret = qwx_pci_alloc_xfer_ring(sc,
-	    &psc->xfer_rings[QWX_PCI_XFER_RING_LOOPBACK_OUTBOUND],
-	    0, MHI_CHAN_TYPE_OUTBOUND, 0, 32);
-	if (ret)
-		goto fail;
-
-	ret = qwx_pci_alloc_xfer_ring(sc,
-	    &psc->xfer_rings[QWX_PCI_XFER_RING_LOOPBACK_INBOUND],
-	    1, MHI_CHAN_TYPE_INBOUND, 0, 32);
-	if (ret)
-		goto fail;
-
-	ret = qwx_pci_alloc_xfer_ring(sc,
 	    &psc->xfer_rings[QWX_PCI_XFER_RING_IPCR_OUTBOUND],
 	    20, MHI_CHAN_TYPE_OUTBOUND, 1, 64);
 	if (ret)
@@ -1331,18 +1367,6 @@ qwx_pci_alloc_xfer_rings_qcn9074(struct qwx_pci_softc *psc)
 {
 	struct qwx_softc *sc = &psc->sc_sc;
 	int ret;
-
-	ret = qwx_pci_alloc_xfer_ring(sc,
-	    &psc->xfer_rings[QWX_PCI_XFER_RING_LOOPBACK_OUTBOUND],
-	    0, MHI_CHAN_TYPE_OUTBOUND, 1, 32);
-	if (ret)
-		goto fail;
-
-	ret = qwx_pci_alloc_xfer_ring(sc,
-	    &psc->xfer_rings[QWX_PCI_XFER_RING_LOOPBACK_INBOUND],
-	    1, MHI_CHAN_TYPE_INBOUND, 1, 32);
-	if (ret)
-		goto fail;
 
 	ret = qwx_pci_alloc_xfer_ring(sc,
 	    &psc->xfer_rings[QWX_PCI_XFER_RING_IPCR_OUTBOUND],
@@ -1470,11 +1494,14 @@ void
 qwx_pci_read_hw_version(struct qwx_softc *sc, uint32_t *major,
     uint32_t *minor)
 {
-	uint32_t soc_hw_version;
+	uint32_t offset, soc_hw_version;
 
-	soc_hw_version = qwx_pcic_read32(sc, TCSR_SOC_HW_VERSION);
-	*major = FIELD_GET(TCSR_SOC_HW_VERSION_MAJOR_MASK, soc_hw_version);
-	*minor = FIELD_GET(TCSR_SOC_HW_VERSION_MINOR_MASK, soc_hw_version);
+	offset = QWX_IS_ATH12K(sc) ?
+	    ATH12K_TCSR_SOC_HW_VERSION : TCSR_SOC_HW_VERSION;
+
+	soc_hw_version = qwx_pcic_read32(sc, offset);
+	*major = MS(soc_hw_version, TCSR_SOC_HW_VERSION_MAJOR);
+	*minor = MS(soc_hw_version, TCSR_SOC_HW_VERSION_MINOR);
 	DPRINTF("%s: pci tcsr_soc_hw_version major %d minor %d\n",
 	    sc->sc_dev.dv_xname, *major, *minor);
 }
@@ -1490,12 +1517,12 @@ qwx_pcic_read32(struct qwx_softc *sc, uint32_t offset)
 	/* for offset beyond BAR + 4K - 32, may
 	 * need to wakeup the device to access.
 	 */
-	wakeup_required = test_bit(ATH11K_FLAG_DEVICE_INIT_DONE, sc->sc_flags)
-	    && offset >= ATH11K_PCI_ACCESS_ALWAYS_OFF;
+	wakeup_required = test_bit(QWX_FLAG_DEVICE_INIT_DONE, sc->sc_flags)
+	    && offset >= QWX_PCI_ACCESS_ALWAYS_OFF;
 	if (wakeup_required && psc->sc_pci_ops->wakeup)
 		ret = psc->sc_pci_ops->wakeup(sc);
 
-	if (offset < ATH11K_PCI_WINDOW_START)
+	if (offset < QWX_PCI_WINDOW_START)
 		val = qwx_pci_read(sc, offset);
 	else
 		val = psc->sc_pci_ops->window_read32(sc, offset);
@@ -1516,12 +1543,12 @@ qwx_pcic_write32(struct qwx_softc *sc, uint32_t offset, uint32_t value)
 	/* for offset beyond BAR + 4K - 32, may
 	 * need to wakeup the device to access.
 	 */
-	wakeup_required = test_bit(ATH11K_FLAG_DEVICE_INIT_DONE, sc->sc_flags)
-	    && offset >= ATH11K_PCI_ACCESS_ALWAYS_OFF;
+	wakeup_required = test_bit(QWX_FLAG_DEVICE_INIT_DONE, sc->sc_flags)
+	    && offset >= QWX_PCI_ACCESS_ALWAYS_OFF;
 	if (wakeup_required && psc->sc_pci_ops->wakeup)
 		ret = psc->sc_pci_ops->wakeup(sc);
 
-	if (offset < ATH11K_PCI_WINDOW_START)
+	if (offset < QWX_PCI_WINDOW_START)
 		qwx_pci_write(sc, offset, value);
 	else
 		psc->sc_pci_ops->window_write32(sc, offset, value);
@@ -1533,12 +1560,12 @@ qwx_pcic_write32(struct qwx_softc *sc, uint32_t offset, uint32_t value)
 void
 qwx_pcic_ext_irq_disable(struct qwx_softc *sc)
 {
-	clear_bit(ATH11K_FLAG_EXT_IRQ_ENABLED, sc->sc_flags);
+	clear_bit(QWX_FLAG_EXT_IRQ_ENABLED, sc->sc_flags);
 
 	/* In case of one MSI vector, we handle irq enable/disable in a
 	 * uniform way since we only have one irq
 	 */
-	if (!test_bit(ATH11K_FLAG_MULTI_MSI_VECTORS, sc->sc_flags))
+	if (!test_bit(QWX_FLAG_MULTI_MSI_VECTORS, sc->sc_flags))
 		return;
 
 	DPRINTF("%s not implemented\n", __func__);
@@ -1547,12 +1574,12 @@ qwx_pcic_ext_irq_disable(struct qwx_softc *sc)
 void
 qwx_pcic_ext_irq_enable(struct qwx_softc *sc)
 {
-	set_bit(ATH11K_FLAG_EXT_IRQ_ENABLED, sc->sc_flags);
+	set_bit(QWX_FLAG_EXT_IRQ_ENABLED, sc->sc_flags);
 
 	/* In case of one MSI vector, we handle irq enable/disable in a
 	 * uniform way since we only have one irq
 	 */
-	if (!test_bit(ATH11K_FLAG_MULTI_MSI_VECTORS, sc->sc_flags))
+	if (!test_bit(QWX_FLAG_MULTI_MSI_VECTORS, sc->sc_flags))
 		return;
 
 	DPRINTF("%s not implemented\n", __func__);
@@ -1564,7 +1591,7 @@ qwx_pcic_ce_irq_enable(struct qwx_softc *sc, uint16_t ce_id)
 	/* In case of one MSI vector, we handle irq enable/disable in a
 	 * uniform way since we only have one irq
 	 */
-	if (!test_bit(ATH11K_FLAG_MULTI_MSI_VECTORS, sc->sc_flags))
+	if (!test_bit(QWX_FLAG_MULTI_MSI_VECTORS, sc->sc_flags))
 		return;
 
 	/* OpenBSD PCI stack does not yet implement MSI interrupt masking. */
@@ -1577,7 +1604,7 @@ qwx_pcic_ce_irq_disable(struct qwx_softc *sc, uint16_t ce_id)
 	/* In case of one MSI vector, we handle irq enable/disable in a
 	 * uniform way since we only have one irq
 	 */
-	if (!test_bit(ATH11K_FLAG_MULTI_MSI_VECTORS, sc->sc_flags))
+	if (!test_bit(QWX_FLAG_MULTI_MSI_VECTORS, sc->sc_flags))
 		return;
 
 	/* OpenBSD PCI stack does not yet implement MSI interrupt masking. */
@@ -1592,7 +1619,7 @@ qwx_pcic_ext_grp_disable(struct qwx_ext_irq_grp *irq_grp)
 	/* In case of one MSI vector, we handle irq enable/disable
 	 * in a uniform way since we only have one irq
 	 */
-	if (!test_bit(ATH11K_FLAG_MULTI_MSI_VECTORS, sc->sc_flags))
+	if (!test_bit(QWX_FLAG_MULTI_MSI_VECTORS, sc->sc_flags))
 		return;
 }
 
@@ -1602,10 +1629,13 @@ qwx_pcic_ext_irq_config(struct qwx_softc *sc, struct pci_attach_args *pa)
 	struct qwx_pci_softc *psc = (struct qwx_pci_softc *)sc;
 	int i, ret, num_vectors = 0;
 	uint32_t msi_data_start = 0;
-	uint32_t base_vector = 0;
+	uint32_t base_idx, base_vector = 0;
 
-	if (!test_bit(ATH11K_FLAG_MULTI_MSI_VECTORS, sc->sc_flags))
+	if (!test_bit(QWX_FLAG_MULTI_MSI_VECTORS, sc->sc_flags))
 		return 0;
+
+	base_idx = QWX_IS_ATH12K(sc) ?
+	    QWX_PCI_IRQ_CE0_OFFSET + CE_COUNT_MAX : ATH11K_PCI_IRQ_DP_OFFSET;
 
 	ret = qwx_pcic_get_user_msi_vector(sc, "DP", &num_vectors,
 	    &msi_data_start, &base_vector);
@@ -1618,7 +1648,7 @@ qwx_pcic_ext_irq_config(struct qwx_softc *sc, struct pci_attach_args *pa)
 
 		irq_grp->sc = sc;
 		irq_grp->grp_id = i;
-#if 0	
+#if 0
 		init_dummy_netdev(&irq_grp->napi_ndev);
 		netif_napi_add(&irq_grp->napi_ndev, &irq_grp->napi,
 			       ath11k_pcic_ext_grp_napi_poll);
@@ -1635,7 +1665,7 @@ qwx_pcic_ext_irq_config(struct qwx_softc *sc, struct pci_attach_args *pa)
 		}
 
 		irq_grp->num_irq = num_irq;
-		irq_grp->irqs[0] = ATH11K_PCI_IRQ_DP_OFFSET + i;
+		irq_grp->irqs[0] = base_idx + i;
 
 		if (num_irq) {
 			int irq_idx = irq_grp->irqs[0];
@@ -1648,10 +1678,12 @@ qwx_pcic_ext_irq_config(struct qwx_softc *sc, struct pci_attach_args *pa)
 				return EIO;
 			}
 
-			snprintf(psc->sc_ivname[irq_idx], sizeof(psc->sc_ivname[0]),
-			    "%s:ex%d", sc->sc_dev.dv_xname, i);
+			snprintf(psc->sc_ivname[irq_idx],
+			    sizeof(psc->sc_ivname[0]), "%s:ex%d",
+			    sc->sc_dev.dv_xname, i);
 			psc->sc_ih[irq_idx] = pci_intr_establish(psc->sc_pc, ih,
-			    IPL_NET, qwx_ext_intr, irq_grp, psc->sc_ivname[irq_idx]);
+			    IPL_NET, qwx_ext_intr, irq_grp,
+			    psc->sc_ivname[irq_idx]);
 			if (psc->sc_ih[irq_idx] == NULL) {
 				printf("%s: failed to request irq %d\n",
 				    sc->sc_dev.dv_xname, irq_idx);
@@ -1676,7 +1708,7 @@ qwx_pcic_config_irq(struct qwx_softc *sc, struct pci_attach_args *pa)
 	int i, ret, irq_idx;
 	pci_intr_handle_t ih;
 
-	if (!test_bit(ATH11K_FLAG_MULTI_MSI_VECTORS, sc->sc_flags))
+	if (!test_bit(QWX_FLAG_MULTI_MSI_VECTORS, sc->sc_flags))
 		return 0;
 
 	ret = qwx_pcic_get_user_msi_vector(sc, "CE", &msi_data_count,
@@ -1690,7 +1722,7 @@ qwx_pcic_config_irq(struct qwx_softc *sc, struct pci_attach_args *pa)
 			continue;
 
 		ce_pipe = &sc->ce.ce_pipe[i];
-		irq_idx = ATH11K_PCI_IRQ_CE0_OFFSET + i;
+		irq_idx = QWX_PCI_IRQ_CE0_OFFSET + i;
 
 		if (pci_intr_map_msivec(pa, irq_idx, &ih) != 0 &&
 		    pci_intr_map(pa, &ih) != 0) {
@@ -1726,7 +1758,7 @@ qwx_pcic_ce_irqs_enable(struct qwx_softc *sc)
 {
 	int i;
 
-	set_bit(ATH11K_FLAG_CE_IRQ_ENABLED, sc->sc_flags);
+	set_bit(QWX_FLAG_CE_IRQ_ENABLED, sc->sc_flags);
 
 	for (i = 0; i < sc->hw_params.ce_count; i++) {
 		if (qwx_ce_get_attr_flags(sc, i) & CE_ATTR_DIS_INTR)
@@ -1740,7 +1772,7 @@ qwx_pcic_ce_irqs_disable(struct qwx_softc *sc)
 {
 	int i;
 
-	clear_bit(ATH11K_FLAG_CE_IRQ_ENABLED, sc->sc_flags);
+	clear_bit(QWX_FLAG_CE_IRQ_ENABLED, sc->sc_flags);
 
 	for (i = 0; i < sc->hw_params.ce_count; i++) {
 		if (qwx_ce_get_attr_flags(sc, i) & CE_ATTR_DIS_INTR)
@@ -1755,13 +1787,13 @@ qwx_pci_start(struct qwx_softc *sc)
 	/* TODO: for now don't restore ASPM in case of single MSI
 	 * vector as MHI register reading in M2 causes system hang.
 	 */
-	if (test_bit(ATH11K_FLAG_MULTI_MSI_VECTORS, sc->sc_flags))
+	if (test_bit(QWX_FLAG_MULTI_MSI_VECTORS, sc->sc_flags))
 		qwx_pci_aspm_restore(sc);
 	else
 		DPRINTF("%s: leaving PCI ASPM disabled to avoid MHI M2 problems"
 		    "\n", sc->sc_dev.dv_xname);
 
-	set_bit(ATH11K_FLAG_DEVICE_INIT_DONE, sc->sc_flags);
+	set_bit(QWX_FLAG_DEVICE_INIT_DONE, sc->sc_flags);
 
 	qwx_ce_rx_post_buf(sc);
 	qwx_pcic_ce_irqs_enable(sc);
@@ -1805,36 +1837,49 @@ qwx_pci_bus_release(struct qwx_softc *sc)
 uint32_t
 qwx_pci_get_window_start(struct qwx_softc *sc, uint32_t offset)
 {
-	if (!sc->hw_params.static_window_map)
-		return ATH11K_PCI_WINDOW_START;
+	if (!sc->static_window_map)
+		return QWX_PCI_WINDOW_START;
 
-	if ((offset ^ HAL_SEQ_WCSS_UMAC_OFFSET) < ATH11K_PCI_WINDOW_RANGE_MASK)
+	if ((offset ^ HAL_SEQ_WCSS_UMAC_OFFSET) < QWX_PCI_WINDOW_RANGE_MASK)
 		/* if offset lies within DP register range, use 3rd window */
-		return 3 * ATH11K_PCI_WINDOW_START;
+		return 3 * QWX_PCI_WINDOW_START;
 	else if ((offset ^ HAL_SEQ_WCSS_UMAC_CE0_SRC_REG(sc)) <
-		 ATH11K_PCI_WINDOW_RANGE_MASK)
+		 QWX_PCI_WINDOW_RANGE_MASK)
 		 /* if offset lies within CE register range, use 2nd window */
-		return 2 * ATH11K_PCI_WINDOW_START;
+		return 2 * QWX_PCI_WINDOW_START;
 	else
-		return ATH11K_PCI_WINDOW_START;
+		return QWX_PCI_WINDOW_START;
 }
 
 void
 qwx_pci_select_window(struct qwx_softc *sc, uint32_t offset)
 {
 	struct qwx_pci_softc *psc = (struct qwx_pci_softc *)sc;
-	uint32_t window = FIELD_GET(ATH11K_PCI_WINDOW_VALUE_MASK, offset);
+	uint32_t window = MS(offset, QWX_PCI_WINDOW_VALUE);
 
 #if notyet
 	lockdep_assert_held(&ab_pci->window_lock);
 #endif
+	if (QWX_IS_ATH12K(sc)) {
+		/*
+		 * Preserve the static window configuration and reset only
+		 * dynamic window.
+		 */
+		window |= psc->register_window & QWX_PCI_WINDOW_STATIC_MASK;
+	}
 
 	if (window != psc->register_window) {
-		qwx_pci_write(sc, ATH11K_PCI_WINDOW_REG_ADDRESS,
-		    ATH11K_PCI_WINDOW_ENABLE_BIT | window);
-		(void) qwx_pci_read(sc, ATH11K_PCI_WINDOW_REG_ADDRESS);
+		qwx_pci_write(sc, QWX_PCI_WINDOW_REG_ADDRESS,
+		    QWX_PCI_WINDOW_ENABLE_BIT | window);
+		(void) qwx_pci_read(sc, QWX_PCI_WINDOW_REG_ADDRESS);
 		psc->register_window = window;
 	}
+}
+
+static inline bool
+qwx_pci_is_offset_within_mhi_region(uint32_t offset)
+{
+	return (offset >= PCI_MHIREGLEN_REG && offset <= PCI_MHI_REGION_END);
 }
 
 void
@@ -1844,19 +1889,27 @@ qwx_pci_window_write32(struct qwx_softc *sc, uint32_t offset, uint32_t value)
 
 	window_start = qwx_pci_get_window_start(sc, offset);
 
-	if (window_start == ATH11K_PCI_WINDOW_START) {
+	if (window_start == QWX_PCI_WINDOW_START) {
 #if notyet
 		spin_lock_bh(&ab_pci->window_lock);
 #endif
 		qwx_pci_select_window(sc, offset);
-		qwx_pci_write(sc, window_start +
-		    (offset & ATH11K_PCI_WINDOW_RANGE_MASK), value);
+
+		if (qwx_pci_is_offset_within_mhi_region(offset) &&
+		    QWX_IS_ATH12K(sc)) {
+			offset = offset - PCI_MHIREGLEN_REG;
+			qwx_pci_write(sc, offset & QWX_PCI_WINDOW_RANGE_MASK,
+			    value);
+		} else {
+			qwx_pci_write(sc, window_start +
+			    (offset & QWX_PCI_WINDOW_RANGE_MASK), value);
+		}
 #if notyet
 		spin_unlock_bh(&ab_pci->window_lock);
 #endif
 	} else {
 		qwx_pci_write(sc, window_start +
-		    (offset & ATH11K_PCI_WINDOW_RANGE_MASK), value);
+		    (offset & QWX_PCI_WINDOW_RANGE_MASK), value);
 	}
 }
 
@@ -1867,19 +1920,27 @@ qwx_pci_window_read32(struct qwx_softc *sc, uint32_t offset)
 
 	window_start = qwx_pci_get_window_start(sc, offset);
 
-	if (window_start == ATH11K_PCI_WINDOW_START) {
+	if (window_start == QWX_PCI_WINDOW_START) {
 #if notyet
 		spin_lock_bh(&ab_pci->window_lock);
 #endif
 		qwx_pci_select_window(sc, offset);
-		val = qwx_pci_read(sc, window_start +
-		    (offset & ATH11K_PCI_WINDOW_RANGE_MASK));
+
+		if (qwx_pci_is_offset_within_mhi_region(offset) &&
+		    QWX_IS_ATH12K(sc)) {
+			offset = offset - PCI_MHIREGLEN_REG;
+			val = qwx_pci_read(sc,
+			    offset & QWX_PCI_WINDOW_RANGE_MASK);
+		} else {
+			val = qwx_pci_read(sc, window_start +
+			    (offset & QWX_PCI_WINDOW_RANGE_MASK));
+		}
 #if notyet
 		spin_unlock_bh(&ab_pci->window_lock);
 #endif
 	} else {
 		val = qwx_pci_read(sc, window_start +
-		    (offset & ATH11K_PCI_WINDOW_RANGE_MASK));
+		    (offset & QWX_PCI_WINDOW_RANGE_MASK));
 	}
 
 	return val;
@@ -1892,12 +1953,12 @@ qwx_pci_select_static_window(struct qwx_softc *sc)
 	uint32_t ce_window;
 	uint32_t window;
 
-	umac_window = FIELD_GET(ATH11K_PCI_WINDOW_VALUE_MASK, HAL_SEQ_WCSS_UMAC_OFFSET);
-	ce_window = FIELD_GET(ATH11K_PCI_WINDOW_VALUE_MASK, HAL_CE_WFSS_CE_REG_BASE);
+	umac_window = MS(HAL_SEQ_WCSS_UMAC_OFFSET, QWX_PCI_WINDOW_VALUE);
+	ce_window = MS(HAL_CE_WFSS_CE_REG_BASE, QWX_PCI_WINDOW_VALUE);
 	window = (umac_window << 12) | (ce_window << 6);
 
-	qwx_pci_write(sc, ATH11K_PCI_WINDOW_REG_ADDRESS,
-	    ATH11K_PCI_WINDOW_ENABLE_BIT | window);
+	qwx_pci_write(sc, QWX_PCI_WINDOW_REG_ADDRESS,
+	    QWX_PCI_WINDOW_ENABLE_BIT | window);
 }
 
 void
@@ -2033,7 +2094,7 @@ qwx_pci_fix_l1ss(struct qwx_softc *sc)
 void
 qwx_pci_enable_ltssm(struct qwx_softc *sc)
 {
-	uint32_t val;
+	uint32_t rst, val;
 	int i;
 
 	val = qwx_pcic_read32(sc, PCIE_PCIE_PARF_LTSSM);
@@ -2049,10 +2110,13 @@ qwx_pci_enable_ltssm(struct qwx_softc *sc)
 
 	DPRINTF("%s: pci ltssm 0x%x\n", sc->sc_dev.dv_xname, val);
 
-	val = qwx_pcic_read32(sc, GCC_GCC_PCIE_HOT_RST);
+	rst = QWX_IS_ATH12K(sc) ?
+	    ATH12K_GCC_GCC_PCIE_HOT_RST : GCC_GCC_PCIE_HOT_RST;
+
+	val = qwx_pcic_read32(sc, rst);
 	val |= GCC_GCC_PCIE_HOT_RST_VAL;
-	qwx_pcic_write32(sc, GCC_GCC_PCIE_HOT_RST, val);
-	val = qwx_pcic_read32(sc, GCC_GCC_PCIE_HOT_RST);
+	qwx_pcic_write32(sc, rst, val);
+	val = qwx_pcic_read32(sc, rst);
 
 	DPRINTF("%s: pci pcie_hot_rst 0x%x\n", sc->sc_dev.dv_xname, val);
 
@@ -2120,7 +2184,7 @@ qwx_pci_msi_config(struct qwx_softc *sc, bool enable)
 	else
 		val &= ~PCI_MSI_MC_MSIE;
 
-	pci_conf_write(psc->sc_pc, psc->sc_tag,  psc->sc_msi_off + PCI_MSI_MC,
+	pci_conf_write(psc->sc_pc, psc->sc_tag, psc->sc_msi_off + PCI_MSI_MC,
 	    val);
 }
 
@@ -2152,7 +2216,7 @@ qwx_pci_aspm_disable(struct qwx_softc *sc)
 	pci_conf_write(psc->sc_pc, psc->sc_tag, psc->sc_cap_off + PCI_PCIE_LCSR,
 	    psc->sc_lcsr & ~(PCI_PCIE_LCSR_ASPM_L0S | PCI_PCIE_LCSR_ASPM_L1));
 
-	psc->sc_flags |= ATH11K_PCI_ASPM_RESTORE;
+	psc->sc_flags |= QWX_PCI_ASPM_RESTORE;
 }
 
 void
@@ -2160,10 +2224,10 @@ qwx_pci_aspm_restore(struct qwx_softc *sc)
 {
 	struct qwx_pci_softc *psc = (struct qwx_pci_softc *)sc;
 
-	if (psc->sc_flags & ATH11K_PCI_ASPM_RESTORE) {
+	if (psc->sc_flags & QWX_PCI_ASPM_RESTORE) {
 		pci_conf_write(psc->sc_pc, psc->sc_tag,
 		    psc->sc_cap_off + PCI_PCIE_LCSR, psc->sc_lcsr);
-		psc->sc_flags &= ~ATH11K_PCI_ASPM_RESTORE;
+		psc->sc_flags &= ~QWX_PCI_ASPM_RESTORE;
 	}
 }
 
@@ -2174,7 +2238,7 @@ qwx_pci_power_up(struct qwx_softc *sc)
 	int error;
 
 	psc->register_window = 0;
-	clear_bit(ATH11K_FLAG_DEVICE_INIT_DONE, sc->sc_flags);
+	clear_bit(QWX_FLAG_DEVICE_INIT_DONE, sc->sc_flags);
 
 	qwx_pci_sw_reset(sc, true);
 
@@ -2189,7 +2253,7 @@ qwx_pci_power_up(struct qwx_softc *sc)
 	if (error)
 		return error;
 
-	if (sc->hw_params.static_window_map)
+	if (sc->static_window_map)
 		qwx_pci_select_static_window(sc);
 
 	return 0;
@@ -2206,7 +2270,7 @@ qwx_pci_power_down(struct qwx_softc *sc)
 	qwx_pci_msi_disable(sc);
 
 	qwx_mhi_stop(sc);
-	clear_bit(ATH11K_FLAG_DEVICE_INIT_DONE, sc->sc_flags);
+	clear_bit(QWX_FLAG_DEVICE_INIT_DONE, sc->sc_flags);
 	qwx_pci_sw_reset(sc, false);
 }
 
@@ -3273,7 +3337,7 @@ qwx_mhi_fw_load_bhi(struct qwx_pci_softc *psc, uint8_t *data, size_t len)
 	qwx_pci_write(sc, psc->bhi_off + MHI_BHI_IMGADDR_LOW,
 	    paddr & 0xffffffff);
 	qwx_pci_write(sc, psc->bhi_off + MHI_BHI_IMGSIZE, len);
-	
+
 	/* Set a random transaction sequence number. */
 	do {
 		seq = arc4random_uniform(MHI_BHI_TXDB_SEQNUM_BMSK);
@@ -4091,11 +4155,11 @@ qwx_pci_intr(void *arg)
 #else
 		printf("%s: fatal firmware error\n",
 		   sc->sc_dev.dv_xname);
-		if (!test_bit(ATH11K_FLAG_CRASH_FLUSH, sc->sc_flags) &&
+		if (!test_bit(QWX_FLAG_CRASH_FLUSH, sc->sc_flags) &&
 		    (sc->sc_ic.ic_if.if_flags & (IFF_UP | IFF_RUNNING)) ==
 		    (IFF_UP | IFF_RUNNING)) {
 			/* Try to reset the device. */
-			set_bit(ATH11K_FLAG_CRASH_FLUSH, sc->sc_flags);
+			set_bit(QWX_FLAG_CRASH_FLUSH, sc->sc_flags);
 			task_add(systq, &sc->init_task);
 		}
 #endif
@@ -4115,7 +4179,7 @@ qwx_pci_intr(void *arg)
 		ret = 1;
 	}
 
-	if (!test_bit(ATH11K_FLAG_MULTI_MSI_VECTORS, sc->sc_flags)) {
+	if (!test_bit(QWX_FLAG_MULTI_MSI_VECTORS, sc->sc_flags)) {
 		int i;
 
 		if (qwx_pci_intr_ctrl_event(psc, &psc->event_rings[0]))
@@ -4130,7 +4194,7 @@ qwx_pci_intr(void *arg)
 				ret = 1;
 		}
 
-		if (test_bit(ATH11K_FLAG_EXT_IRQ_ENABLED, sc->sc_flags)) {
+		if (test_bit(QWX_FLAG_EXT_IRQ_ENABLED, sc->sc_flags)) {
 			for (i = 0; i < nitems(sc->ext_irq_grp); i++) {
 				if (qwx_dp_service_srng(sc, i))
 					ret = 1;

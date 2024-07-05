@@ -9151,7 +9151,7 @@ qwx_qmi_host_cap_send(struct qwx_softc *sc)
 	if (sc->hw_params.global_reset)
 		req.nm_modem |= QWX_PLATFORM_CAP_PCIE_GLOBAL_RESET;
 
-	req.nm_modem |= QWX_PLATFORM_CAP_PCIE_PME_D3COLD;
+//	req.nm_modem |= QWX_PLATFORM_CAP_PCIE_PME_D3COLD;
 
 	DNPRINTF(QWX_D_QMI, "%s: qmi host cap request\n", __func__);
 

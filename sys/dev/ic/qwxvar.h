@@ -1145,6 +1145,14 @@ struct dp_link_desc_bank {
 #define DP_LINK_DESC_ALLOC_SIZE_THRESH 0x200000
 #define DP_LINK_DESC_BANKS_MAX 8
 
+#define DP_LINK_DESC_START	0x4000
+#define DP_LINK_DESC_SHIFT	3
+
+#define DP_LINK_DESC_COOKIE_SET(id, page) \
+	((((id) + DP_LINK_DESC_START) << DP_LINK_DESC_SHIFT) | (page))
+
+#define DP_LINK_DESC_BANK_MASK	GENMASK(2, 0)
+
 struct hal_wbm_idle_scatter_list {
 	struct qwx_dmamem *mem;
 	bus_addr_t paddr;

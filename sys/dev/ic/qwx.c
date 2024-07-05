@@ -10717,6 +10717,7 @@ qwx_dp_scatter_idle_link_desc_setup(struct qwx_softc *sc, int size,
 	int i;
 	int ret = 0;
 	uint32_t end_offset;
+	uint32_t cookie;
 
 	n_entries_per_buf = HAL_WBM_IDLE_SCATTER_BUF_SIZE /
 	    qwx_hal_srng_get_entrysize(sc, HAL_WBM_IDLE_LINK);
@@ -10745,7 +10746,10 @@ qwx_dp_scatter_idle_link_desc_setup(struct qwx_softc *sc, int size,
 		n_entries = DP_LINK_DESC_ALLOC_SIZE_THRESH / HAL_LINK_DESC_SIZE;
 		paddr = link_desc_banks[i].paddr;
 		while (n_entries) {
-			qwx_hal_set_link_desc_addr(scatter_buf, i, paddr);
+			cookie = i;
+			if (QWX_IS_ATH12K(sc))
+				cookie = DP_LINK_DESC_COOKIE_SET(n_entries, i);
+			qwx_hal_set_link_desc_addr(scatter_buf, cookie, paddr);
 			n_entries--;
 			paddr += HAL_LINK_DESC_SIZE;
 			if (rem_entries) {
@@ -18295,6 +18299,7 @@ qwx_dp_process_rxdma_err(struct qwx_softc *sc, int mac_id)
 	void *desc;
 	int num_buf_freed = 0;
 	uint64_t paddr;
+	uint32_t cookie;
 	uint32_t desc_bank;
 	void *link_desc_va;
 	int num_msdus;
@@ -18312,7 +18317,11 @@ qwx_dp_process_rxdma_err(struct qwx_softc *sc, int mac_id)
 	qwx_hal_srng_access_begin(sc, srng);
 
 	while ((desc = qwx_hal_srng_dst_get_next_entry(sc, srng))) {
-		qwx_hal_rx_reo_ent_paddr_get(sc, desc, &paddr, &desc_bank);
+		qwx_hal_rx_reo_ent_paddr_get(sc, desc, &paddr, &cookie);
+		desc_bank = cookie;
+		if (QWX_IS_ATH12K(sc))
+			desc_bank = FIELD_GET(DP_LINK_DESC_BANK_MASK,
+			    cookie);
 
 		entr_ring = (struct hal_reo_entrance_ring *)desc;
 		rxdma_err_code = FIELD_GET(

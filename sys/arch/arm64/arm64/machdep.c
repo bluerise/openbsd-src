@@ -928,7 +928,7 @@ initarm(struct arm64_bootparams *abp)
 		len = fdt_node_property(node, "openbsd,dma-constraint", &prop);
 		if (len == sizeof(dma_constraint)) {
 			dma_constraint.ucr_low = bemtoh64((uint64_t *)prop);
-			dma_constraint.ucr_high = bemtoh64((uint64_t *)prop + 1);
+			dma_constraint.ucr_high = 0xffffffff;
 		}
 	}
 

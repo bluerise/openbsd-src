@@ -11006,7 +11006,8 @@ qwx_dp_srng_common_cleanup(struct qwx_softc *sc)
 	struct qwx_dp *dp = &sc->dp;
 	int i;
 
-	qwx_dp_stop_shadow_timers(sc);
+	if (!QWX_IS_ATH12K(sc))
+		qwx_dp_stop_shadow_timers(sc);
 	qwx_dp_srng_cleanup(sc, &dp->wbm_desc_rel_ring);
 	qwx_dp_srng_cleanup(sc, &dp->tcl_cmd_ring);
 	qwx_dp_srng_cleanup(sc, &dp->tcl_status_ring);
@@ -11419,7 +11420,8 @@ qwx_hal_reo_cmd_send(struct qwx_softc *sc, struct hal_srng *srng,
 		break;
 	}
 
-	qwx_dp_shadow_start_timer(sc, srng, &sc->dp.reo_cmd_timer);
+	if (!QWX_IS_ATH12K(sc))
+		qwx_dp_shadow_start_timer(sc, srng, &sc->dp.reo_cmd_timer);
 out:
 	qwx_hal_srng_access_end(sc, srng);
 #ifdef notyet
@@ -11485,9 +11487,10 @@ qwx_dp_srng_common_setup(struct qwx_softc *sc)
 		srng = &sc->hal.srng_list[dp->tx_ring[i].tcl_data_ring.ring_id];
 		qwx_hal_tx_init_data_ring(sc, srng);
 
-		qwx_dp_shadow_init_timer(sc, &dp->tx_ring_timer[i],
-		    ATH11K_SHADOW_DP_TIMER_INTERVAL,
-		    dp->tx_ring[i].tcl_data_ring.ring_id);
+		if (!QWX_IS_ATH12K(sc))
+			qwx_dp_shadow_init_timer(sc, &dp->tx_ring_timer[i],
+			    ATH11K_SHADOW_DP_TIMER_INTERVAL,
+			    dp->tx_ring[i].tcl_data_ring.ring_id);
 	}
 
 	ret = qwx_dp_srng_setup(sc, &dp->reo_reinject_ring, HAL_REO_REINJECT,
@@ -11525,8 +11528,9 @@ qwx_dp_srng_common_setup(struct qwx_softc *sc)
 	srng = &sc->hal.srng_list[dp->reo_cmd_ring.ring_id];
 	qwx_hal_reo_init_cmd_ring(sc, srng);
 
-	qwx_dp_shadow_init_timer(sc, &dp->reo_cmd_timer,
-	     ATH11K_SHADOW_CTRL_TIMER_INTERVAL, dp->reo_cmd_ring.ring_id);
+	if (!QWX_IS_ATH12K(sc))
+		qwx_dp_shadow_init_timer(sc, &dp->reo_cmd_timer,
+		     ATH11K_SHADOW_CTRL_TIMER_INTERVAL, dp->reo_cmd_ring.ring_id);
 
 	ret = qwx_dp_srng_setup(sc, &dp->reo_status_ring, HAL_REO_STATUS,
 	    0, 0, DP_REO_STATUS_RING_SIZE);
@@ -23058,7 +23062,8 @@ qwx_ce_cleanup_pipes(struct qwx_softc *sc)
 	struct qwx_ce_pipe *pipe;
 	int pipe_num;
 
-	qwx_ce_stop_shadow_timers(sc);
+	if (!QWX_IS_ATH12K(sc))
+		qwx_ce_stop_shadow_timers(sc);
 
 	for (pipe_num = 0; pipe_num < sc->hw_params.ce_count; pipe_num++) {
 		pipe = &sc->ce.ce_pipe[pipe_num];
@@ -23617,7 +23622,7 @@ qwx_ce_send(struct qwx_softc *sc, struct mbuf *m, uint8_t pipe_id,
 
 	qwx_hal_srng_access_end(sc, srng);
 
-	if (qwx_ce_need_shadow_fix(pipe_id))
+	if (qwx_ce_need_shadow_fix(pipe_id) && !QWX_IS_ATH12K(sc))
 		qwx_dp_shadow_start_timer(sc, srng, &sc->ce.hp_timer[pipe_id]);
 
 err_unlock:
@@ -25944,7 +25949,8 @@ qwx_dp_tx(struct qwx_softc *sc, struct qwx_vif *arvif, uint8_t pdev_id,
 
 	qwx_hal_srng_access_end(sc, tcl_ring);
 
-	qwx_dp_shadow_start_timer(sc, tcl_ring, &dp->tx_ring_timer[ti.ring_id]);
+	if (!QWX_IS_ATH12K(sc))
+		qwx_dp_shadow_start_timer(sc, tcl_ring, &dp->tx_ring_timer[ti.ring_id]);
 #ifdef notyet
 	spin_unlock_bh(&tcl_ring->lock);
 #endif

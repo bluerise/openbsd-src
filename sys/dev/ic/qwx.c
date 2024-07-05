@@ -15390,7 +15390,7 @@ qwx_htc_wait_target(struct qwx_softc *sc)
 	/* For QCA6390, wmi endpoint uses 1 credit to avoid
 	 * back-to-back write.
 	 */
-	if (sc->hw_params.supports_shadow_regs)
+	if (sc->hw_params.supports_shadow_regs && !QWX_IS_ATH12K(sc))
 		htc->total_transmit_credits = 1;
 
 	qwx_htc_setup_target_buffer_assignments(htc);

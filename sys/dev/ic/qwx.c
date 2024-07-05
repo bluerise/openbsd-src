@@ -5794,6 +5794,77 @@ const struct qmi_elem_info qmi_wlanfw_phy_cap_req_msg_v01_ei[] = {
 	},
 };
 
+const struct qmi_elem_info qmi_wlanfw_phy_cap_resp_msg_v01_ei[] = {
+	{
+		.data_type	= QMI_STRUCT,
+		.elem_len	= 1,
+		.elem_size	= sizeof(struct qmi_response_type_v01),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x02,
+		.offset		= offsetof(struct qmi_wlanfw_phy_cap_resp_msg_v01, resp),
+		.ei_array	= qmi_response_type_v01_ei,
+	},
+	{
+		.data_type	= QMI_OPT_FLAG,
+		.elem_len	= 1,
+		.elem_size	= sizeof(uint8_t),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x10,
+		.offset		= offsetof(struct qmi_wlanfw_phy_cap_resp_msg_v01,
+					   num_phy_valid),
+	},
+	{
+		.data_type	= QMI_UNSIGNED_1_BYTE,
+		.elem_len	= 1,
+		.elem_size	= sizeof(uint8_t),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x10,
+		.offset		= offsetof(struct qmi_wlanfw_phy_cap_resp_msg_v01,
+					   num_phy),
+	},
+	{
+		.data_type	= QMI_OPT_FLAG,
+		.elem_len	= 1,
+		.elem_size	= sizeof(uint8_t),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x11,
+		.offset		= offsetof(struct qmi_wlanfw_phy_cap_resp_msg_v01,
+					   board_id_valid),
+	},
+	{
+		.data_type	= QMI_UNSIGNED_4_BYTE,
+		.elem_len	= 1,
+		.elem_size	= sizeof(uint32_t),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x11,
+		.offset		= offsetof(struct qmi_wlanfw_phy_cap_resp_msg_v01,
+					   board_id),
+	},
+	{
+		.data_type	= QMI_OPT_FLAG,
+		.elem_len	= 1,
+		.elem_size	= sizeof(uint8_t),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x13,
+		.offset		= offsetof(struct qmi_wlanfw_phy_cap_resp_msg_v01,
+					   single_chip_mlo_support_valid),
+	},
+	{
+		.data_type	= QMI_UNSIGNED_1_BYTE,
+		.elem_len	= 1,
+		.elem_size	= sizeof(uint8_t),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x13,
+		.offset		 = offsetof(struct qmi_wlanfw_phy_cap_resp_msg_v01,
+					    single_chip_mlo_support),
+	},
+	{
+		.data_type	= QMI_EOTI,
+		.array_type	= NO_ARRAY,
+		.tlv_type	= QMI_COMMON_TLV_TYPE,
+	},
+};
+
 const struct qmi_elem_info qmi_wlanfw_mem_cfg_s_v01_ei[] = {
 	{
 		.data_type	= QMI_UNSIGNED_8_BYTE,
@@ -7806,6 +7877,42 @@ qwx_qmi_decode_msg(struct qwx_softc *sc, void *output, size_t output_len,
 }
 
 void
+qwx_qmi_recv_wlanfw_phy_cap_req_v1(struct qwx_softc *sc, struct mbuf *m,
+    uint16_t txn_id, uint16_t msg_len)
+{
+	struct qmi_wlanfw_phy_cap_resp_msg_v01 resp;
+	const struct qmi_elem_info *ei;
+	uint8_t *msg = mtod(m, uint8_t *);
+
+	DNPRINTF(QWX_D_QMI, "%s\n", __func__);
+
+	ei = qmi_wlanfw_phy_cap_resp_msg_v01_ei;
+	if (qwx_qmi_decode_msg(sc, &resp, sizeof(resp), ei, msg, msg_len))
+		return;
+
+	DNPRINTF(QWX_D_QMI, "%s: resp.resp.result=0x%x\n",
+	    __func__, le16toh(resp.resp.result));
+	DNPRINTF(QWX_D_QMI, "%s: resp.resp.error=0x%x\n",
+	    __func__, le16toh(resp.resp.error));
+	DNPRINTF(QWX_D_QMI, "%s: resp.num_phy_valid=0x%x\n",
+	   __func__, resp.num_phy_valid);
+	DNPRINTF(QWX_D_QMI, "%s: resp.num_phy=0x%x\n",
+	   __func__, resp.num_phy);
+	DNPRINTF(QWX_D_QMI, "%s: resp.board_id_valid=0x%x\n",
+	   __func__, resp.board_id_valid);
+	DNPRINTF(QWX_D_QMI, "%s: resp.board_id=0x%x\n",
+	   __func__, le32toh(resp.board_id));
+	DNPRINTF(QWX_D_QMI, "%s: resp.single_chip_mlo_support_valid=0x%x\n",
+	   __func__, resp.single_chip_mlo_support_valid);
+	DNPRINTF(QWX_D_QMI, "%s: resp.single_chip_mlo_support=0x%x\n",
+	   __func__, resp.single_chip_mlo_support);
+
+	sc->qmi_resp.result = le16toh(resp.resp.result);
+	sc->qmi_resp.error = le16toh(resp.resp.error);
+	wakeup(&sc->qmi_resp);
+}
+
+void
 qwx_qmi_recv_wlanfw_ind_register_req_v1(struct qwx_softc *sc, struct mbuf *m,
     uint16_t txn_id, uint16_t msg_len)
 {
@@ -8070,6 +8177,9 @@ qwx_qmi_recv_response(struct qwx_softc *sc, struct mbuf *m,
     uint16_t txn_id, uint16_t msg_id, uint16_t msg_len)
 {
 	switch (msg_id) {
+	case QMI_WLANFW_PHY_CAP_REQ_V01:
+		qwx_qmi_recv_wlanfw_phy_cap_req_v1(sc, m, txn_id, msg_len);
+		break;
 	case QMI_WLANFW_IND_REGISTER_REQ_V01:
 		qwx_qmi_recv_wlanfw_ind_register_req_v1(sc, m, txn_id, msg_len);
 		break;
@@ -8895,6 +9005,40 @@ done:
 		m_freem(m);
 	free(encoded_msg, M_DEVBUF, encoded_len);
 	return err;
+}
+
+int
+qwx_qmi_phy_cap_send(struct qwx_softc *sc)
+{
+	struct qmi_wlanfw_phy_cap_req_msg_v01 req;
+	int ret;
+
+	memset(&req, 0, sizeof(req));
+
+	DNPRINTF(QWX_D_QMI, "%s: qmi phy cap request\n", __func__);
+
+	ret = qwx_qmi_send_request(sc, QMI_WLANFW_PHY_CAP_REQ_V01,
+			       QMI_WLANFW_PHY_CAP_REQ_MSG_V01_MAX_LEN,
+			       qmi_wlanfw_phy_cap_req_msg_v01_ei,
+			       &req, sizeof(req));
+	if (ret) {
+		printf("%s: failed to send phy cap request: %d\n",
+		    sc->sc_dev.dv_xname, ret);
+		return -1;
+	}
+
+	sc->qmi_resp.result = QMI_RESULT_FAILURE_V01;
+	while (sc->qmi_resp.result != QMI_RESULT_SUCCESS_V01) {
+		ret = tsleep_nsec(&sc->qmi_resp, 0, "qwxphycap",
+		    SEC_TO_NSEC(1));
+		if (ret) {
+			printf("%s: fw phy cap request timeout\n",
+			    sc->sc_dev.dv_xname);
+			return ret;
+		}
+	}
+
+	return 0;
 }
 
 int
@@ -20835,6 +20979,14 @@ qwx_qmi_event_server_arrive(struct qwx_softc *sc)
 
 	sc->fw_init_done = 0;
 	sc->expect_fwmem_req = 1;
+
+	ret = qwx_qmi_phy_cap_send(sc);
+	if (ret < 0) {
+		printf("%s: failed to send qmi phy cap: %d\n",
+		    sc->sc_dev.dv_xname, ret);
+		sc->expect_fwmem_req = 0;
+		return ret;
+	}
 
 	ret = qwx_qmi_fw_ind_register_send(sc);
 	if (ret < 0) {

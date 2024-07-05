@@ -6507,7 +6507,22 @@ struct qmi_response_type_v01 {
 	uint16_t error;
 };
 
+#define QMI_WLANFW_PHY_CAP_REQ_MSG_V01_MAX_LEN			0
+#define QMI_WLANFW_PHY_CAP_REQ_V01				0x0057
+#define QMI_WLANFW_PHY_CAP_RESP_MSG_V01_MAX_LEN			18
+#define QMI_WLANFW_PHY_CAP_RESP_V01				0x0057
+
 struct qmi_wlanfw_phy_cap_req_msg_v01 {
+};
+
+struct qmi_wlanfw_phy_cap_resp_msg_v01 {
+	struct qmi_response_type_v01 resp;
+	uint8_t num_phy_valid;
+	uint8_t num_phy;
+	uint8_t board_id_valid;
+	uint32_t board_id;
+	uint8_t single_chip_mlo_support_valid;
+	uint8_t single_chip_mlo_support;
 };
 
 #define QMI_WLANFW_IND_REGISTER_REQ_MSG_V01_MAX_LEN		54

@@ -6600,6 +6600,14 @@ struct wlfw_host_mlo_chip_info_s_v01 {
 	uint8_t valid_mlo_link_id[QMI_WLFW_MAX_NUM_MLO_LINKS_PER_CHIP_V01];
 };
 
+enum ath12k_qmi_cnss_feature {
+	CNSS_FEATURE_MIN_ENUM_VAL_V01 = INT_MIN,
+	CNSS_QDSS_CFG_MISS_V01 = 3,
+	CNSS_PCIE_PERST_NO_PULL_V01 = 4,
+	CNSS_MAX_FEATURE_V01 = 64,
+	CNSS_FEATURE_MAX_ENUM_VAL_V01 = INT_MAX,
+};
+
 struct qmi_wlanfw_host_cap_req_msg_v01 {
 	uint8_t num_clients_valid;
 	uint32_t num_clients;

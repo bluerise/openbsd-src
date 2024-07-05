@@ -4169,6 +4169,8 @@ static const struct qwx_hw_params qwx_hw_params[] = {
 		.fix_l1ss = false,
 		.hal_params = &qwx_hw_hal_params_wcn7850,
 		.hal_ops = &hal_wcn7850_ops,
+		.qmi_cnss_feature_bitmap = BIT(CNSS_QDSS_CFG_MISS_V01) |
+					   BIT(CNSS_PCIE_PERST_NO_PULL_V01),
 		.fixed_fw_mem = false,
 		.global_reset = true,
 		.m3_fw_support = true,
@@ -9126,6 +9128,11 @@ qwx_qmi_host_cap_send(struct qwx_softc *sc)
 
 	req.cal_done_valid = 1;
 	req.cal_done = sc->qmi_cal_done;
+
+	if (sc->hw_params.qmi_cnss_feature_bitmap) {
+		req.feature_list_valid = 1;
+		req.feature_list = sc->hw_params.qmi_cnss_feature_bitmap;
+	}
 
 	if (sc->hw_params.internal_sleep_clock) {
 		req.nm_modem_valid = 1;

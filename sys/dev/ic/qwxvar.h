@@ -238,6 +238,7 @@ struct qwx_hw_params {
 	uint8_t max_tx_ring;
 	const struct qwx_hw_hal_params *hal_params;
 	const struct hal_ops *hal_ops;
+	uint64_t qmi_cnss_feature_bitmap;
 #if notyet
 	bool supports_dynamic_smps_6ghz;
 	bool alloc_cacheable_memory;

@@ -4162,6 +4162,7 @@ static const struct qwx_hw_params qwx_hw_params[] = {
 		.target_ce_count = 9,
 		.svc_to_ce_map = qwx_target_service_to_ce_map_wlan_qca6390,
 		.svc_to_ce_map_len = 14,
+		.credit_flow = true,
 		.max_tx_ring = DP_TCL_NUM_RING_MAX,
 		.cold_boot_calib = false,
 		.supports_shadow_regs = true,

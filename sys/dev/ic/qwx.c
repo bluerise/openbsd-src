@@ -1199,6 +1199,50 @@ qwx_hw_ipq5018_reo_setup(struct qwx_softc *sc)
 	    ring_hash_map);
 }
 
+void
+qwx_hw_wcn7850_reo_setup(struct qwx_softc *sc)
+{
+	uint32_t reo_base = HAL_SEQ_WCSS_UMAC_REO_REG;
+	uint32_t val;
+	/* Each hash entry uses four bits to map to a particular ring. */
+	uint32_t ring_hash_map = HAL_HASH_ROUTING_RING_SW1 << 0 |
+	    HAL_HASH_ROUTING_RING_SW2 << 4 |
+	    HAL_HASH_ROUTING_RING_SW3 << 8 |
+	    HAL_HASH_ROUTING_RING_SW4 << 12 |
+	    HAL_HASH_ROUTING_RING_SW1 << 16 |
+	    HAL_HASH_ROUTING_RING_SW2 << 20 |
+	    HAL_HASH_ROUTING_RING_SW3 << 24 |
+	    HAL_HASH_ROUTING_RING_SW4 << 28;
+
+	val = sc->ops.read32(sc, reo_base + HAL_REO1_GEN_ENABLE);
+	val |= FIELD_PREP(HAL_REO1_GEN_ENABLE_AGING_LIST_ENABLE, 1) |
+	    FIELD_PREP(HAL_REO1_GEN_ENABLE_AGING_FLUSH_ENABLE, 1);
+	sc->ops.write32(sc, reo_base + HAL_REO1_GEN_ENABLE, val);
+
+	val = sc->ops.read32(sc, reo_base + HAL_REO1_MISC_CTL(sc));
+	val &= ~HAL_REO1_MISC_CTL_FRAGMENT_DST_RING;
+	val &= ~ATH12K_HAL_REO1_MISC_CTL_BAR_DST_RING;
+	val |= FIELD_PREP(HAL_REO1_MISC_CTL_FRAGMENT_DST_RING,
+	    ATH12K_HAL_SRNG_RING_ID_REO2SW0);
+	val |= FIELD_PREP(ATH12K_HAL_REO1_MISC_CTL_BAR_DST_RING,
+	    ATH12K_HAL_SRNG_RING_ID_REO2SW0);
+	sc->ops.write32(sc, reo_base + HAL_REO1_MISC_CTL(sc), val);
+
+	sc->ops.write32(sc, reo_base + HAL_REO1_AGING_THRESH_IX_0(sc),
+	    HAL_DEFAULT_REO_TIMEOUT_USEC);
+	sc->ops.write32(sc, reo_base + HAL_REO1_AGING_THRESH_IX_1(sc),
+	    HAL_DEFAULT_REO_TIMEOUT_USEC);
+	sc->ops.write32(sc, reo_base + HAL_REO1_AGING_THRESH_IX_2(sc),
+	    HAL_DEFAULT_REO_TIMEOUT_USEC);
+	sc->ops.write32(sc, reo_base + HAL_REO1_AGING_THRESH_IX_3(sc),
+	    ATH12K_HAL_DEFAULT_BE_BK_VI_REO_TIMEOUT_USEC);
+
+	sc->ops.write32(sc, reo_base + HAL_REO1_DEST_RING_CTRL_IX_2,
+	    ring_hash_map);
+	sc->ops.write32(sc, reo_base + HAL_REO1_DEST_RING_CTRL_IX_3,
+	    ring_hash_map);
+}
+
 int
 qwx_hw_mac_id_to_pdev_id_ipq8074(struct qwx_hw_params *hw, int mac_id)
 {
@@ -2183,6 +2227,13 @@ const struct ath11k_hw_ops wcn6750_ops = {
 	.rx_desc_mpdu_start_addr2 = ath11k_hw_ipq9074_rx_desc_mpdu_start_addr2,
 	.get_ring_selector = ath11k_hw_wcn6750_get_tcl_ring_selector,
 #endif
+};
+
+const struct ath11k_hw_ops wcn7850_ops = {
+	.get_hw_mac_from_pdev_id = qwx_hw_ipq6018_mac_from_pdev_id,
+	.mac_id_to_pdev_id = qwx_hw_mac_id_to_pdev_id_qca6390,
+	.mac_id_to_srng_id = qwx_hw_mac_id_to_srng_id_qca6390,
+	.reo_setup = qwx_hw_wcn7850_reo_setup,
 };
 
 #define QWX_TX_RING_MASK_0	0x1
@@ -4153,6 +4204,7 @@ static const struct qwx_hw_params qwx_hw_params[] = {
 		},
 		.max_radios = 1,
 		.internal_sleep_clock = true,
+		.hw_ops = &wcn7850_ops,
 		.ring_mask = &qwx_hw_ring_mask_wcn7850,
 		.regs = &wcn7850_regs,
 		.qmi_service_ins_id = QWX_QMI_WLFW_SERVICE_INS_ID_V01_QCA6390,

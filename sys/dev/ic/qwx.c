@@ -4227,6 +4227,7 @@ static const struct qwx_hw_params qwx_hw_params[] = {
 		.fixed_fw_mem = false,
 		.global_reset = true,
 		.m3_fw_support = true,
+		.tx_ring_size = DP_TCL_DATA_RING_SIZE,
 	},
 };
 

@@ -21506,6 +21506,7 @@ static const struct hal_srng_config ath12k_hw_srng_config_template[] = {
 		.max_rings = 1,
 		.entry_size = sizeof(struct hal_wbm_buffer_ring) >> 2,
 		.mac_type = ATH12K_HAL_SRNG_DMAC,
+		.lmac_ring = true,
 		.ring_dir = HAL_SRNG_DIR_SRC,
 		.max_size = HAL_RXDMA_RING_MAX_SIZE_BE,
 	},
@@ -21514,6 +21515,7 @@ static const struct hal_srng_config ath12k_hw_srng_config_template[] = {
 		.max_rings = 0,
 		.entry_size = 0,
 		.mac_type = ATH12K_HAL_SRNG_PMAC,
+		.lmac_ring = true,
 		.ring_dir = HAL_SRNG_DIR_DST,
 		.max_size = HAL_RXDMA_RING_MAX_SIZE_BE,
 	},
@@ -21522,6 +21524,7 @@ static const struct hal_srng_config ath12k_hw_srng_config_template[] = {
 		.max_rings = 1,
 		.entry_size = sizeof(struct hal_mon_buf_ring) >> 2,
 		.mac_type = ATH12K_HAL_SRNG_PMAC,
+		.lmac_ring = true,
 		.ring_dir = HAL_SRNG_DIR_SRC,
 		.max_size = HAL_RXDMA_RING_MAX_SIZE_BE,
 	},
@@ -21532,6 +21535,7 @@ static const struct hal_srng_config ath12k_hw_srng_config_template[] = {
 		.max_rings = 2,
 		.entry_size = 8 >> 2, /* TODO: Define the struct */
 		.mac_type = ATH12K_HAL_SRNG_PMAC,
+		.lmac_ring = true,
 		.ring_dir = HAL_SRNG_DIR_SRC,
 		.max_size = HAL_RXDMA_RING_MAX_SIZE_BE,
 	},
@@ -21541,6 +21545,7 @@ static const struct hal_srng_config ath12k_hw_srng_config_template[] = {
 		.entry_size =
 		    sizeof(struct hal_tcl_entrance_from_ppe_ring) >> 2,
 		.mac_type = ATH12K_HAL_SRNG_PMAC,
+		.lmac_ring = true,
 		.ring_dir = HAL_SRNG_DIR_SRC,
 		.max_size = HAL_SW2TCL1_RING_BASE_MSB_RING_SIZE,
 	},
@@ -21549,6 +21554,7 @@ static const struct hal_srng_config ath12k_hw_srng_config_template[] = {
 		.max_rings = 1,
 		.entry_size = sizeof(struct hal_wbm_release_ring) >> 2,
 		.mac_type = ATH12K_HAL_SRNG_PMAC,
+		.lmac_ring = true,
 		.ring_dir = HAL_SRNG_DIR_SRC,
 		.max_size = HAL_WBM2PPE_RELEASE_RING_BASE_MSB_RING_SIZE,
 	},
@@ -21557,6 +21563,7 @@ static const struct hal_srng_config ath12k_hw_srng_config_template[] = {
 		.max_rings = 1,
 		.entry_size = sizeof(struct hal_mon_buf_ring) >> 2,
 		.mac_type = ATH12K_HAL_SRNG_PMAC,
+		.lmac_ring = true,
 		.ring_dir = HAL_SRNG_DIR_SRC,
 		.max_size = HAL_RXDMA_RING_MAX_SIZE_BE,
 	},
@@ -21565,6 +21572,7 @@ static const struct hal_srng_config ath12k_hw_srng_config_template[] = {
 		.max_rings = 1,
 		.entry_size = sizeof(struct hal_mon_dest_desc) >> 2,
 		.mac_type = ATH12K_HAL_SRNG_PMAC,
+		.lmac_ring = true,
 		.ring_dir = HAL_SRNG_DIR_DST,
 		.max_size = HAL_RXDMA_RING_MAX_SIZE_BE,
 	},
@@ -21573,6 +21581,7 @@ static const struct hal_srng_config ath12k_hw_srng_config_template[] = {
 		.max_rings = 1,
 		.entry_size = sizeof(struct hal_mon_dest_desc) >> 2,
 		.mac_type = ATH12K_HAL_SRNG_PMAC,
+		.lmac_ring = true,
 		.ring_dir = HAL_SRNG_DIR_DST,
 		.max_size = HAL_RXDMA_RING_MAX_SIZE_BE,
 	}
@@ -21805,6 +21814,7 @@ qwx_hal_srng_create_config_wcn7850(struct qwx_softc *sc)
 	s = &hal->srng_config[HAL_RXDMA_BUF];
 	s->max_rings = 2;
 	s->mac_type = ATH12K_HAL_SRNG_PMAC;
+	s->lmac_ring = true;
 
 	s = &hal->srng_config[HAL_RXDMA_DST];
 	s->max_rings = 1;

@@ -10279,6 +10279,9 @@ qwx_dp_srng_calculate_msi_group(struct qwx_softc *sc, enum hal_ring_type type,
 	case HAL_RXDMA_MONITOR_DST:
 		grp_mask = &sc->hw_params.ring_mask->rx_mon_status[0];
 		break;
+	case HAL_TX_MONITOR_DST:
+		grp_mask = &sc->hw_params.ring_mask->tx_mon_dest[0];
+		break;
 	case HAL_RXDMA_DST:
 		grp_mask = &sc->hw_params.ring_mask->rxdma2host[0];
 		break;
@@ -10403,6 +10406,12 @@ qwx_dp_srng_setup(struct qwx_softc *sc, struct dp_srng *ring,
 	case HAL_RXDMA_MONITOR_BUF:
 	case HAL_RXDMA_MONITOR_STATUS:
 		params.low_threshold = num_entries >> 3;
+		params.flags |= HAL_SRNG_FLAGS_LOW_THRESH_INTR_EN;
+		params.intr_batch_cntr_thres_entries = 0;
+		params.intr_timer_thres_us = HAL_SRNG_INT_TIMER_THRESHOLD_RX;
+		break;
+	case HAL_TX_MONITOR_DST:
+		params.low_threshold = DP_TX_MONITOR_BUF_SIZE_MAX >> 3;
 		params.flags |= HAL_SRNG_FLAGS_LOW_THRESH_INTR_EN;
 		params.intr_batch_cntr_thres_entries = 0;
 		params.intr_timer_thres_us = HAL_SRNG_INT_TIMER_THRESHOLD_RX;

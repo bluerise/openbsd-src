@@ -11125,7 +11125,10 @@ qwx_hal_tx_set_dscp_tid_map(struct qwx_softc *sc, int id)
 	    HAL_TCL1_RING_CMN_CTRL_REG);
 
 	/* Enable read/write access */
-	ctrl_reg_val |= HAL_TCL1_RING_CMN_CTRL_DSCP_TID_MAP_PROG_EN;
+	if (QWX_IS_ATH12K(sc))
+		ctrl_reg_val |= ATH12K_HAL_TCL1_RING_CMN_CTRL_DSCP_TID_MAP_PROG_EN;
+	else
+		ctrl_reg_val |= HAL_TCL1_RING_CMN_CTRL_DSCP_TID_MAP_PROG_EN;
 	sc->ops.write32(sc, HAL_SEQ_WCSS_UMAC_TCL_REG +
 	    HAL_TCL1_RING_CMN_CTRL_REG, ctrl_reg_val);
 
@@ -11164,7 +11167,10 @@ qwx_hal_tx_set_dscp_tid_map(struct qwx_softc *sc, int id)
 	/* Disable read/write access */
 	ctrl_reg_val = sc->ops.read32(sc, HAL_SEQ_WCSS_UMAC_TCL_REG +
 	    HAL_TCL1_RING_CMN_CTRL_REG);
-	ctrl_reg_val &= ~HAL_TCL1_RING_CMN_CTRL_DSCP_TID_MAP_PROG_EN;
+	if (QWX_IS_ATH12K(sc))
+		ctrl_reg_val &= ~ATH12K_HAL_TCL1_RING_CMN_CTRL_DSCP_TID_MAP_PROG_EN;
+	else
+		ctrl_reg_val &= ~HAL_TCL1_RING_CMN_CTRL_DSCP_TID_MAP_PROG_EN;
 	sc->ops.write32(sc, HAL_SEQ_WCSS_UMAC_TCL_REG +
 	    HAL_TCL1_RING_CMN_CTRL_REG, ctrl_reg_val);
 }
@@ -22247,6 +22253,10 @@ qwx_hal_srng_src_hw_init(struct qwx_softc *sc, struct hal_srng *srng)
 	val |= HAL_TCL1_RING_MISC_MSI_LOOPCNT_DISABLE;
 
 	val |= HAL_TCL1_RING_MISC_SRNG_ENABLE;
+
+	if (QWX_IS_ATH12K(sc) && srng->ring_id == HAL_SRNG_RING_ID_WBM_IDLE_LINK) {
+		val |= ATH12K_HAL_TCL1_RING_MISC_MSI_RING_ID_DISABLE;
+	}
 
 	sc->ops.write32(sc, reg_base + HAL_TCL1_RING_MISC_OFFSET(sc), val);
 }

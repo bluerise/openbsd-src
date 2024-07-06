@@ -6996,6 +6996,7 @@ enum ath11k_qmi_bdf_type {
 				       HAL_WBM_IDLE_SCATTER_NEXT_PTR_SIZE)
 
 #define HAL_DSCP_TID_MAP_TBL_NUM_ENTRIES_MAX	48
+#define ATH12K_HAL_DSCP_TID_MAP_TBL_NUM_ENTRIES_MAX 32
 #define HAL_DSCP_TID_TBL_SIZE			24
 
 /* calculate the register address from bar0 of shadow register x */

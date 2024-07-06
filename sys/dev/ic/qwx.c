@@ -11631,6 +11631,7 @@ qwx_dp_alloc(struct qwx_softc *sc)
 	struct hal_srng *srng = NULL;
 	size_t size = 0;
 	uint32_t n_link_desc = 0;
+	int max_entries;
 	int ret;
 	int i;
 
@@ -11690,7 +11691,10 @@ qwx_dp_alloc(struct qwx_softc *sc)
 		}
 	}
 
-	for (i = 0; i < HAL_DSCP_TID_MAP_TBL_NUM_ENTRIES_MAX; i++)
+	max_entries = HAL_DSCP_TID_MAP_TBL_NUM_ENTRIES_MAX;
+	if (QWX_IS_ATH12K(sc))
+		max_entries = ATH12K_HAL_DSCP_TID_MAP_TBL_NUM_ENTRIES_MAX;
+	for (i = 0; i < max_entries; i++)
 		qwx_hal_tx_set_dscp_tid_map(sc, i);
 
 	/* Init any SOC level resource for DP */

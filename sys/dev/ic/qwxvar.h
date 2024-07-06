@@ -33,6 +33,7 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#define QWX_DEBUG
 #ifdef QWX_DEBUG
 #define DPRINTF(x...)		do { if (qwx_debug) printf(x); } while(0)
 #define DNPRINTF(n,x...)	do { if (qwx_debug & n) printf(x); } while(0)

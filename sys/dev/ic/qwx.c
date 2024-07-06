@@ -115,13 +115,13 @@
 #ifdef QWX_DEBUG
 uint32_t	qwx_debug = 0
 		    | QWX_D_MISC
-/*		    | QWX_D_MHI */
-/*		    | QWX_D_QMI */
-/*		    | QWX_D_WMI */
-/*		    | QWX_D_HTC */
-/*		    | QWX_D_HTT */
-/*		    | QWX_D_MAC */
-/*		    | QWX_D_MGMT */
+		    | QWX_D_MHI
+		    | QWX_D_QMI
+		    | QWX_D_WMI
+		    | QWX_D_HTC
+		    | QWX_D_HTT
+		    | QWX_D_MAC
+		    | QWX_D_MGMT
 		;
 #endif
 
@@ -7420,11 +7420,11 @@ qwx_qmi_decode_datalen(struct qwx_softc *sc, size_t *used, uint32_t *datalen,
 
 	*datalen = 0;
 
-	DNPRINTF(QWX_D_QMI, "%s: input: ", __func__);
-	for (int i = 0; i < input_len; i++) {
-		DNPRINTF(QWX_D_QMI, " %02x", input[i]);
-	}
-	DNPRINTF(QWX_D_QMI, "\n");
+//	DNPRINTF(QWX_D_QMI, "%s: input: ", __func__);
+//	for (int i = 0; i < input_len; i++) {
+//		DNPRINTF(QWX_D_QMI, " %02x", input[i]);
+//	}
+//	DNPRINTF(QWX_D_QMI, "\n");
 
 	if (remain < ei->elem_size) {
 		printf("%s: QMI message too short: remain=%zu elem_size=%u\n", __func__, remain, ei->elem_size);
@@ -7466,11 +7466,11 @@ qwx_qmi_decode_string(struct qwx_softc *sc, size_t *used_total,
 
 	*used_total = 0;
 
-	DNPRINTF(QWX_D_QMI, "%s: input: ", __func__);
-	for (int i = 0; i < input_len; i++) {
-		DNPRINTF(QWX_D_QMI, " %02x", input[i]);
-	}
-	DNPRINTF(QWX_D_QMI, "\n");
+//	DNPRINTF(QWX_D_QMI, "%s: input: ", __func__);
+//	for (int i = 0; i < input_len; i++) {
+//		DNPRINTF(QWX_D_QMI, " %02x", input[i]);
+//	}
+//	DNPRINTF(QWX_D_QMI, "\n");
 
 	if (nested) {
 		/* Strings nested in structs use an in-band length field. */
@@ -7539,11 +7539,11 @@ qwx_qmi_decode_struct(struct qwx_softc *sc, size_t *used_total,
 
 	*used_total = 0;
 
-	DNPRINTF(QWX_D_QMI, "%s: input: ", __func__);
-	for (int i = 0; i < input_len; i++) {
-		DNPRINTF(QWX_D_QMI, " %02x", input[i]);
-	}
-	DNPRINTF(QWX_D_QMI, "\n");
+//	DNPRINTF(QWX_D_QMI, "%s: input: ", __func__);
+//	for (int i = 0; i < input_len; i++) {
+//		DNPRINTF(QWX_D_QMI, " %02x", input[i]);
+//	}
+//	DNPRINTF(QWX_D_QMI, "\n");
 
 	min_size = qwx_qmi_decode_min_elem_size(struct_ei, 0);
 	DNPRINTF(QWX_D_QMI, "%s: minimum struct size: %u\n", __func__, min_size);
@@ -7689,11 +7689,11 @@ qwx_qmi_decode_msg(struct qwx_softc *sc, void *output, size_t output_len,
 
 	memset(output, 0, output_len);
 
-	DNPRINTF(QWX_D_QMI, "%s: input: ", __func__);
-	for (int i = 0; i < input_len; i++) {
-		DNPRINTF(QWX_D_QMI, " %02x", input[i]);
-	}
-	DNPRINTF(QWX_D_QMI, "\n");
+//	DNPRINTF(QWX_D_QMI, "%s: input: ", __func__);
+//	for (int i = 0; i < input_len; i++) {
+//		DNPRINTF(QWX_D_QMI, " %02x", input[i]);
+//	}
+//	DNPRINTF(QWX_D_QMI, "\n");
 
 	while (remain > 0 && ei->data_type != QMI_EOTI) {
 		uint32_t nelem = 1, i;
@@ -7923,10 +7923,10 @@ qwx_qmi_decode_msg(struct qwx_softc *sc, void *output, size_t output_len,
 		    "%s: next ei 0x%x ei->data_type=0x%x remain=%zu\n",
 		    __func__, ei->tlv_type, ei->data_type, remain);
 
-		DNPRINTF(QWX_D_QMI, "%s: remaining input: ", __func__);
-		for (int i = 0; i < remain; i++)
-			DNPRINTF(QWX_D_QMI, " %02x", p[i]);
-		DNPRINTF(QWX_D_QMI, "\n");
+//		DNPRINTF(QWX_D_QMI, "%s: remaining input: ", __func__);
+//		for (int i = 0; i < remain; i++)
+//			DNPRINTF(QWX_D_QMI, " %02x", p[i]);
+//		DNPRINTF(QWX_D_QMI, "\n");
 	}
 
 	return 0;

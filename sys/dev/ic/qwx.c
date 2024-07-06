@@ -10624,6 +10624,7 @@ qwx_hal_setup_link_idle_list(struct qwx_softc *sc,
 	struct qwx_buffer_addr *link_addr;
 	int i;
 	uint32_t reg_scatter_buf_sz = HAL_WBM_IDLE_SCATTER_BUF_SIZE / 64;
+	uint32_t val;
 
 	link_addr = (void *)sbuf[0].vaddr + HAL_WBM_IDLE_SCATTER_BUF_SIZE;
 
@@ -10687,9 +10688,12 @@ qwx_hal_setup_link_idle_list(struct qwx_softc *sc,
 	    2 * tot_link_desc);
 
 	/* Enable the SRNG */
+	val = HAL_WBM_IDLE_LINK_RING_MISC_SRNG_ENABLE;
+	if (QWX_IS_ATH12K(sc))
+		val |= HAL_WBM_IDLE_LINK_RING_MISC_RIND_ID_DISABLE;
 	sc->ops.write32(sc,
 	    HAL_SEQ_WCSS_UMAC_WBM_REG + HAL_WBM_IDLE_LINK_RING_MISC_ADDR(sc),
-	    0x40);
+	    val);
 }
 
 void

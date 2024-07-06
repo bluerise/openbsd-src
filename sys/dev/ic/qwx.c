@@ -22195,7 +22195,8 @@ qwx_hal_srng_src_hw_init(struct qwx_softc *sc, struct hal_srng *srng)
 	val = FIELD_PREP(HAL_REO1_RING_ID_ENTRY_SIZE, srng->entry_size);
 	sc->ops.write32(sc, reg_base + HAL_TCL1_RING_ID_OFFSET(sc), val);
 
-	if (srng->ring_id == HAL_SRNG_RING_ID_WBM_IDLE_LINK) {
+	if (srng->ring_id == HAL_SRNG_RING_ID_WBM_IDLE_LINK &&
+	    !QWX_IS_ATH12K(sc)) {
 		sc->ops.write32(sc, reg_base, (uint32_t)srng->ring_base_paddr);
 		val = FIELD_PREP(HAL_TCL1_RING_BASE_MSB_RING_BASE_ADDR_MSB,
 		    ((uint64_t)srng->ring_base_paddr >>

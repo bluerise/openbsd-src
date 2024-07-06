@@ -343,6 +343,8 @@ extern const struct qwx_hw_ring_mask qwx_hw_ring_mask_wcn6750;
 extern const struct qwx_hw_ring_mask qwx_hw_ring_mask_wcn7850;
 
 struct qwx_hw_regs {
+	uint32_t hal_tcl1_ring_cmn_ctrl_reg;
+	uint32_t hal_tcl1_ring_dscp_tid_map;
 	uint32_t hal_tcl1_ring_base_lsb;
 	uint32_t hal_tcl1_ring_base_msb;
 	uint32_t hal_tcl1_ring_id;

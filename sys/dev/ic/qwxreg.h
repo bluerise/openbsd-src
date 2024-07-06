@@ -7313,8 +7313,10 @@ enum hal_reo_cmd_status {
 #define HAL_WLAON_REG_BASE			0x01f80000
 
 /* SW2TCL(x) R0 ring configuration address */
-#define HAL_TCL1_RING_CMN_CTRL_REG		0x00000014
-#define HAL_TCL1_RING_DSCP_TID_MAP		0x0000002c
+#define HAL_TCL1_RING_CMN_CTRL_REG		\
+	(sc->hw_params.regs->hal_tcl1_ring_cmn_ctrl_reg)
+#define HAL_TCL1_RING_DSCP_TID_MAP		\
+	(sc->hw_params.regs->hal_tcl1_ring_dscp_tid_map)
 #define HAL_TCL1_RING_BASE_LSB(sc)		\
 	(sc->hw_params.regs->hal_tcl1_ring_base_lsb)
 #define HAL_TCL1_RING_BASE_MSB(sc)		\

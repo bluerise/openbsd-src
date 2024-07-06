@@ -4233,6 +4233,8 @@ static const struct qwx_hw_params qwx_hw_params[] = {
 
 const struct qwx_hw_regs ipq8074_regs = {
 	/* SW2TCL(x) R0 ring configuration address */
+	.hal_tcl1_ring_cmn_ctrl_reg = 0x00000014,
+	.hal_tcl1_ring_dscp_tid_map = 0x0000002c,
 	.hal_tcl1_ring_base_lsb = 0x00000510,
 	.hal_tcl1_ring_base_msb = 0x00000514,
 	.hal_tcl1_ring_id = 0x00000518,
@@ -4323,6 +4325,8 @@ const struct qwx_hw_regs ipq8074_regs = {
 
 const struct qwx_hw_regs qca6390_regs = {
 	/* SW2TCL(x) R0 ring configuration address */
+	.hal_tcl1_ring_cmn_ctrl_reg = 0x00000014,
+	.hal_tcl1_ring_dscp_tid_map = 0x0000002c,
 	.hal_tcl1_ring_base_lsb = 0x00000684,
 	.hal_tcl1_ring_base_msb = 0x00000688,
 	.hal_tcl1_ring_id = 0x0000068c,
@@ -4413,6 +4417,8 @@ const struct qwx_hw_regs qca6390_regs = {
 
 const struct qwx_hw_regs qcn9074_regs = {
 	/* SW2TCL(x) R0 ring configuration address */
+	.hal_tcl1_ring_cmn_ctrl_reg = 0x00000014,
+	.hal_tcl1_ring_dscp_tid_map = 0x0000002c,
 	.hal_tcl1_ring_base_lsb = 0x000004f0,
 	.hal_tcl1_ring_base_msb = 0x000004f4,
 	.hal_tcl1_ring_id = 0x000004f8,
@@ -4503,6 +4509,8 @@ const struct qwx_hw_regs qcn9074_regs = {
 
 const struct qwx_hw_regs wcn6855_regs = {
 	/* SW2TCL(x) R0 ring configuration address */
+	.hal_tcl1_ring_cmn_ctrl_reg = 0x00000014,
+	.hal_tcl1_ring_dscp_tid_map = 0x0000002c,
 	.hal_tcl1_ring_base_lsb = 0x00000690,
 	.hal_tcl1_ring_base_msb = 0x00000694,
 	.hal_tcl1_ring_id = 0x00000698,
@@ -4595,6 +4603,8 @@ const struct qwx_hw_regs wcn6855_regs = {
 
 const struct qwx_hw_regs wcn6750_regs = {
 	/* SW2TCL(x) R0 ring configuration address */
+	.hal_tcl1_ring_cmn_ctrl_reg = 0x00000014,
+	.hal_tcl1_ring_dscp_tid_map = 0x0000002c,
 	.hal_tcl1_ring_base_lsb = 0x00000694,
 	.hal_tcl1_ring_base_msb = 0x00000698,
 	.hal_tcl1_ring_id = 0x0000069c,
@@ -4687,6 +4697,8 @@ const struct qwx_hw_regs wcn6750_regs = {
 
 const struct qwx_hw_regs wcn7850_regs = {
 	/* SW2TCL(x) R0 ring configuration address */
+	.hal_tcl1_ring_cmn_ctrl_reg = 0x00000020,
+	.hal_tcl1_ring_dscp_tid_map = 0x00000240,
 	.hal_tcl1_ring_base_lsb = 0x00000900,
 	.hal_tcl1_ring_id = 0x00000908,
 	.hal_tcl1_ring_misc = 0x00000910,

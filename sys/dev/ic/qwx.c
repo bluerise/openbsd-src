@@ -4217,6 +4217,7 @@ static const struct qwx_hw_params qwx_hw_params[] = {
 		.credit_flow = true,
 		.max_tx_ring = DP_TCL_NUM_RING_MAX,
 		.cold_boot_calib = false,
+		.htt_peer_map_v2 = false,
 		.supports_shadow_regs = true,
 		.fw_mem_mode = 0,
 		.fix_l1ss = false,

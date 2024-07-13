@@ -6187,6 +6187,32 @@ const struct qmi_elem_info qmi_wlanfw_soc_info_s_v01_ei[] = {
 	},
 };
 
+const struct qmi_elem_info qmi_wlanfw_dev_mem_info_s_v01_ei[] = {
+	{
+		.data_type	= QMI_UNSIGNED_8_BYTE,
+		.elem_len	= 1,
+		.elem_size	= sizeof(uint64_t),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0,
+		.offset		= offsetof(struct qmi_wlanfw_dev_mem_info_s_v01,
+					   start),
+	},
+	{
+		.data_type	= QMI_UNSIGNED_8_BYTE,
+		.elem_len	= 1,
+		.elem_size	= sizeof(uint64_t),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0,
+		.offset		= offsetof(struct qmi_wlanfw_dev_mem_info_s_v01,
+					   size),
+	},
+	{
+		.data_type	= QMI_EOTI,
+		.array_type	= NO_ARRAY,
+		.tlv_type	= QMI_COMMON_TLV_TYPE,
+	},
+};
+
 const struct qmi_elem_info qmi_wlanfw_fw_version_info_s_v01_ei[] = {
 	{
 		.data_type	= QMI_UNSIGNED_4_BYTE,
@@ -6406,6 +6432,59 @@ const struct qmi_elem_info qmi_wlanfw_cap_resp_msg_v01_ei[] = {
 		.tlv_type       = 0x19,
 		.offset         = offsetof(struct qmi_wlanfw_cap_resp_msg_v01,
 					   eeprom_read_timeout),
+	},
+	{
+		.data_type	= QMI_OPT_FLAG,
+		.elem_len	= 1,
+		.elem_size	= sizeof(uint8_t),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x1A,
+		.offset		= offsetof(struct qmi_wlanfw_cap_resp_msg_v01,
+					   fw_caps_valid),
+	},
+	{
+		.data_type	= QMI_UNSIGNED_8_BYTE,
+		.elem_len	= 1,
+		.elem_size	= sizeof(uint64_t),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x1A,
+		.offset		= offsetof(struct qmi_wlanfw_cap_resp_msg_v01, fw_caps),
+	},
+	{
+		.data_type	= QMI_OPT_FLAG,
+		.elem_len	= 1,
+		.elem_size	= sizeof(uint8_t),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x1B,
+		.offset		= offsetof(struct qmi_wlanfw_cap_resp_msg_v01,
+					   rd_card_chain_cap_valid),
+	},
+	{
+		.data_type	= QMI_UNSIGNED_4_BYTE,
+		.elem_len	= 1,
+		.elem_size	= sizeof(uint32_t),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x1B,
+		.offset		= offsetof(struct qmi_wlanfw_cap_resp_msg_v01,
+					   rd_card_chain_cap),
+	},
+	{
+		.data_type	= QMI_OPT_FLAG,
+		.elem_len	= 1,
+		.elem_size	= sizeof(uint8_t),
+		.array_type	= NO_ARRAY,
+		.tlv_type	= 0x1C,
+		.offset		= offsetof(struct qmi_wlanfw_cap_resp_msg_v01,
+					   dev_mem_info_valid),
+	},
+	{
+		.data_type	= QMI_STRUCT,
+		.elem_len	= ATH12K_QMI_WLFW_MAX_DEV_MEM_NUM_V01,
+		.elem_size	= sizeof(struct qmi_wlanfw_dev_mem_info_s_v01),
+		.array_type	= STATIC_ARRAY,
+		.tlv_type	= 0x1C,
+		.offset		= offsetof(struct qmi_wlanfw_cap_resp_msg_v01, dev_mem),
+		.ei_array	= qmi_wlanfw_dev_mem_info_s_v01_ei,
 	},
 	{
 		.data_type	= QMI_EOTI,
@@ -8062,6 +8141,7 @@ qwx_qmi_recv_wlanfw_cap_resp_v1(struct qwx_softc *sc, struct mbuf *m,
 	struct qmi_wlanfw_cap_resp_msg_v01 resp;
 	const struct qmi_elem_info *ei;
 	uint8_t *msg = mtod(m, uint8_t *);
+	int i;
 
 	DNPRINTF(QWX_D_QMI, "%s\n", __func__);
 
@@ -8094,6 +8174,20 @@ qwx_qmi_recv_wlanfw_cap_resp_v1(struct qwx_softc *sc, struct mbuf *m,
 	if (resp.fw_build_id_valid)
 		strlcpy(sc->qmi_target.fw_build_id, resp.fw_build_id,
 			sizeof(sc->qmi_target.fw_build_id));
+
+	if (resp.dev_mem_info_valid) {
+		for (i = 0; i < ATH12K_QMI_WLFW_MAX_DEV_MEM_NUM_V01; i++) {
+			sc->qmi_dev_mem[i].start =
+				resp.dev_mem[i].start;
+			sc->qmi_dev_mem[i].size =
+				resp.dev_mem[i].size;
+			DNPRINTF(QWX_D_QMI,
+				   "%s: devmem [%d] start 0x%llx size %llu\n",
+				   sc->sc_dev.dv_xname, i,
+				   sc->qmi_dev_mem[i].start,
+				   sc->qmi_dev_mem[i].size);
+		}
+	}
 
 	if (resp.eeprom_read_timeout_valid) {
 		sc->qmi_target.eeprom_caldata = resp.eeprom_read_timeout;
@@ -11647,6 +11741,163 @@ qwx_dp_tx_ring_alloc_tx_data(struct qwx_softc *sc, struct dp_tx_ring *tx_ring)
 	return 0;
 }
 
+enum ath12k_dp_desc_type {
+	ATH12K_DP_TX_DESC,
+	ATH12K_DP_RX_DESC,
+};
+
+int
+qwx_dp_cmem_init(struct qwx_softc *sc, struct qwx_dp *dp,
+    enum ath12k_dp_desc_type type)
+{
+	uint32_t cmem_base;
+	int i, start, end;
+
+	cmem_base = sc->qmi_dev_mem[ATH12K_QMI_DEVMEM_CMEM_INDEX].start;
+
+	switch (type) {
+	case ATH12K_DP_TX_DESC:
+		start = ATH12K_TX_SPT_PAGE_OFFSET;
+		end = start + ATH12K_NUM_TX_SPT_PAGES;
+		break;
+	case ATH12K_DP_RX_DESC:
+		start = ATH12K_RX_SPT_PAGE_OFFSET;
+		end = start + ATH12K_NUM_RX_SPT_PAGES;
+		break;
+	default:
+		printf("%s: invalid descriptor type %d in cmem init\n",
+		    sc->sc_dev.dv_xname, type);
+		return EINVAL;
+	}
+
+	/* Write to PPT in CMEM */
+	for (i = start; i < end; i++)
+		sc->ops.write32(sc, cmem_base + ATH12K_PPT_ADDR_OFFSET(i),
+		    QWX_DMA_DVA(dp->spt_info[i].mem) >> ATH12K_SPT_4K_ALIGN_OFFSET);
+
+	return 0;
+}
+
+int
+qwx_dp_cc_desc_init(struct qwx_softc *sc)
+{
+	return 0;
+}
+
+void
+qwx_dp_cc_cleanup(struct qwx_softc *sc)
+{
+	// FIXME
+}
+
+int
+qwx_dp_cc_init(struct qwx_softc *sc)
+{
+	struct qwx_dp *dp = &sc->dp;
+	int i, ret = 0;
+
+	if (!QWX_IS_ATH12K(sc))
+		return 0;
+
+	TAILQ_INIT(&dp->rx_desc_free_list);
+#ifdef notyet
+	spin_lock_init(&dp->rx_desc_lock);
+#endif
+
+	for (i = 0; i < ATH11K_HW_MAX_QUEUES; i++) {
+		TAILQ_INIT(&dp->tx_desc_free_list[i]);
+		TAILQ_INIT(&dp->tx_desc_used_list[i]);
+#ifdef notyet
+		spin_lock_init(&dp->tx_desc_lock[i]);
+#endif
+	}
+
+	dp->num_spt_pages = ATH12K_NUM_SPT_PAGES;
+	if (dp->num_spt_pages > ATH12K_MAX_PPT_ENTRIES)
+		dp->num_spt_pages = ATH12K_MAX_PPT_ENTRIES;
+
+	dp->spt_info = mallocarray(dp->num_spt_pages,
+	    sizeof(struct ath12k_spt_info),
+	    M_DEVBUF, M_NOWAIT | M_ZERO);
+	if (!dp->spt_info) {
+		printf("%s: SPT page allocation failure\n",
+		    sc->sc_dev.dv_xname);
+		return ENOMEM;
+	}
+
+	for (i = 0; i < dp->num_spt_pages; i++) {
+		dp->spt_info[i].mem = qwx_dmamem_alloc(sc->sc_dmat,
+		    ATH12K_PAGE_SIZE, PAGE_SIZE);
+		if (!dp->spt_info[i].mem) {
+			ret = ENOMEM;
+			goto free;
+		}
+
+		if (QWX_DMA_DVA(dp->spt_info[i].mem) & ATH12K_SPT_4K_ALIGN_CHECK) {
+			printf("%s: SPT allocated memory is not 4K aligned\n",
+			    sc->sc_dev.dv_xname);
+			ret = EINVAL;
+			goto free;
+		}
+	}
+
+	ret = qwx_dp_cmem_init(sc, dp, ATH12K_DP_TX_DESC);
+	if (ret) {
+		printf("%s: HW CC Tx cmem init failed: %d\n",
+		    sc->sc_dev.dv_xname, ret);
+		goto free;
+	}
+
+	ret = qwx_dp_cmem_init(sc, dp, ATH12K_DP_RX_DESC);
+	if (ret) {
+		printf("%s: HW CC Rx cmem init failed: %d\n",
+		    sc->sc_dev.dv_xname, ret);
+		goto free;
+	}
+
+	ret = qwx_dp_cc_desc_init(sc);
+	if (ret) {
+		printf("%s: HW CC desc init failed: %d\n",
+		    sc->sc_dev.dv_xname, ret);
+		goto free;
+	}
+
+	return 0;
+free:
+	qwx_dp_cc_cleanup(sc);
+	return ret;
+}
+
+int
+qwx_dp_init_bank_profiles(struct qwx_softc *sc)
+{
+	if (!QWX_IS_ATH12K(sc))
+		return 0;
+
+	return 0;
+}
+
+void
+qwx_dp_deinit_bank_profiles(struct qwx_softc *sc)
+{
+	// FIXME
+}
+
+int
+qwx_dp_reoq_lut_setup(struct qwx_softc *sc)
+{
+	if (!QWX_IS_ATH12K(sc))
+		return 0;
+
+	return 0;
+}
+
+void
+qwx_dp_reoq_lut_cleanup(struct qwx_softc *sc)
+{
+	// FIXME
+}
+
 int
 qwx_dp_alloc(struct qwx_softc *sc)
 {
@@ -11686,9 +11937,21 @@ qwx_dp_alloc(struct qwx_softc *sc)
 		return ret;
 	}
 
-	ret = qwx_dp_srng_common_setup(sc);
+	ret = qwx_dp_cc_init(sc);
 	if (ret)
 		goto fail_link_desc_cleanup;
+
+	ret = qwx_dp_init_bank_profiles(sc);
+	if (ret)
+		goto fail_hw_cc_cleanup;
+
+	ret = qwx_dp_srng_common_setup(sc);
+	if (ret)
+		goto fail_dp_bank_profiles_cleanup;
+
+	ret = qwx_dp_reoq_lut_setup(sc);
+	if (ret)
+		goto fail_cmn_srng_cleanup;
 
 	size = sizeof(struct hal_wbm_release_ring) * DP_TX_COMP_RING_SIZE;
 
@@ -11710,7 +11973,7 @@ qwx_dp_alloc(struct qwx_softc *sc)
 		    M_NOWAIT | M_ZERO);
 		if (!dp->tx_ring[i].tx_status) {
 			ret = ENOMEM;
-			goto fail_cmn_srng_cleanup;
+			goto fail_cmn_reoq_cleanup;
 		}
 	}
 
@@ -11723,8 +11986,14 @@ qwx_dp_alloc(struct qwx_softc *sc)
 	/* Init any SOC level resource for DP */
 
 	return 0;
+fail_cmn_reoq_cleanup:
+	qwx_dp_reoq_lut_cleanup(sc);
 fail_cmn_srng_cleanup:
 	qwx_dp_srng_common_cleanup(sc);
+fail_dp_bank_profiles_cleanup:
+	qwx_dp_deinit_bank_profiles(sc);
+fail_hw_cc_cleanup:
+	qwx_dp_cc_cleanup(sc);
 fail_link_desc_cleanup:
 	qwx_dp_link_desc_cleanup(sc, dp->link_desc_banks, HAL_WBM_IDLE_LINK,
 	    &dp->wbm_idle_ring);

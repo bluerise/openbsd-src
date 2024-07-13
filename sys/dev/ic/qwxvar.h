@@ -1064,6 +1064,74 @@ struct qwx_dp_htt_wbm_tx_status {
 #define DP_TX_DESC_ID_MSDU_ID GENMASK(18, 2)
 #define DP_TX_DESC_ID_POOL_ID GENMASK(20, 19)
 
+#define ATH12K_NUM_POOL_TX_DESC	32768
+
+/* TODO: revisit this count during testing */
+#define ATH12K_RX_DESC_COUNT	(12288)
+
+#define ATH12K_PAGE_SIZE	PAGE_SIZE
+
+/* Total 1024 entries in PPT, i.e 4K/4 considering 4K aligned
+ * SPT pages which makes lower 12bits 0
+ */
+#define ATH12K_MAX_PPT_ENTRIES	1024
+
+/* Total 512 entries in a SPT, i.e 4K Page/8 */
+#define ATH12K_MAX_SPT_ENTRIES	512
+
+#define ATH12K_NUM_RX_SPT_PAGES	((ATH12K_RX_DESC_COUNT) / ATH12K_MAX_SPT_ENTRIES)
+
+#define ATH12K_TX_SPT_PAGES_PER_POOL (ATH12K_NUM_POOL_TX_DESC / \
+					  ATH12K_MAX_SPT_ENTRIES)
+#define ATH12K_NUM_TX_SPT_PAGES	(ATH12K_TX_SPT_PAGES_PER_POOL * ATH11K_HW_MAX_QUEUES)
+#define ATH12K_NUM_SPT_PAGES	(ATH12K_NUM_RX_SPT_PAGES + ATH12K_NUM_TX_SPT_PAGES)
+
+#define ATH12K_TX_SPT_PAGE_OFFSET 0
+#define ATH12K_RX_SPT_PAGE_OFFSET ATH12K_NUM_TX_SPT_PAGES
+
+/* The SPT pages are divided for RX and TX, first block for RX
+ * and remaining for TX
+ */
+#define ATH12K_NUM_TX_SPT_PAGE_START ATH12K_NUM_RX_SPT_PAGES
+
+#define ATH12K_DP_RX_DESC_MAGIC	0xBABABABA
+
+/* 4K aligned address have last 12 bits set to 0, this check is done
+ * so that two spt pages address can be stored per 8bytes
+ * of CMEM (PPT)
+ */
+#define ATH12K_SPT_4K_ALIGN_CHECK 0xFFF
+#define ATH12K_SPT_4K_ALIGN_OFFSET 12
+#define ATH12K_PPT_ADDR_OFFSET(ppt_index) (4 * (ppt_index))
+
+/* To indicate HW of CMEM address, b0-31 are cmem base received via QMI */
+#define ATH12K_CMEM_ADDR_MSB 0x10
+
+/* Of 20 bits cookie, b0-b8 is to indicate SPT offset and b9-19 for PPT */
+#define ATH12K_CC_SPT_MSB 8
+#define ATH12K_CC_PPT_MSB 19
+#define ATH12K_CC_PPT_SHIFT 9
+#define ATH12K_DP_CC_COOKIE_SPT	GENMASK(8, 0)
+#define ATH12K_DP_CC_COOKIE_PPT	GENMASK(19, 9)
+
+#define DP_REO_QREF_NUM		GENMASK(31, 16)
+#define DP_MAX_PEER_ID		2047
+
+/* Total size of the LUT is based on 2K peers, each having reference
+ * for 17tids, note each entry is of type ath12k_reo_queue_ref
+ * hence total size is 2048 * 17 * 8 = 278528
+ */
+#define DP_REOQ_LUT_SIZE	278528
+
+/* Invalid TX Bank ID value */
+#define DP_INVALID_BANK_ID -1
+
+struct ath12k_dp_tx_bank_profile {
+	uint8_t is_configured;
+	uint32_t num_users;
+	uint32_t bank_config;
+};
+
 struct qwx_hp_update_timer {
 	struct timeout timer;
 	int started;
@@ -1073,6 +1141,29 @@ struct qwx_hp_update_timer {
 	uint32_t ring_id;
 	uint32_t interval;
 	struct qwx_softc *sc;
+};
+
+struct ath12k_rx_desc_info {
+//	struct list_head list;
+//	struct sk_buff *skb;
+	uint32_t cookie;
+	uint32_t magic;
+	uint8_t in_use		: 1,
+	        reserved	: 7;
+};
+
+struct ath12k_tx_desc_info {
+//	struct list_head list;
+//	struct sk_buff *skb;
+	uint32_t desc_id; /* Cookie */
+	uint8_t mac_id;
+	uint8_t pool_id;
+};
+
+struct ath12k_spt_info {
+	struct qwx_dmamem *mem;
+	struct ath12k_rx_desc_info *rxbaddr[ATH12K_NUM_RX_SPT_PAGES];
+	struct ath12k_tx_desc_info *txbaddr[ATH12K_NUM_TX_SPT_PAGES];
 };
 
 struct dp_rx_tid {
@@ -1204,6 +1295,19 @@ struct qwx_dp {
 #endif
 	struct qwx_hp_update_timer reo_cmd_timer;
 	struct qwx_hp_update_timer tx_ring_timer[DP_TCL_NUM_RING_MAX];
+	struct ath12k_spt_info *spt_info;
+	uint32_t num_spt_pages;
+	TAILQ_HEAD(,ath12k_rx_desc_info) rx_desc_free_list;
+#ifdef notyet
+	/* protects the free desc list */
+	spinlock_t rx_desc_lock;
+#endif
+	TAILQ_HEAD(,ath12k_tx_desc_info) tx_desc_free_list[ATH11K_HW_MAX_QUEUES];
+	TAILQ_HEAD(,ath12k_tx_desc_info) tx_desc_used_list[ATH11K_HW_MAX_QUEUES];
+#ifdef notyet
+	/* protects the free and used desc lists */
+	spinlock_t tx_desc_lock[ATH11K_HW_MAX_QUEUES];
+#endif
 };
 
 #define ATH11K_SHADOW_DP_TIMER_INTERVAL 20
@@ -1258,6 +1362,11 @@ struct qwx_qmi_target_info {
 	char fw_build_timestamp[QWX_QMI_WLANFW_MAX_TIMESTAMP_LEN_V01 + 1];
 	char fw_build_id[ATH11K_QMI_WLANFW_MAX_BUILD_ID_LEN_V01 + 1];
 	char bdf_ext[ATH11K_QMI_BDF_EXT_STR_LENGTH];
+};
+
+struct qwx_qmi_dev_mem_info {
+	uint64_t start;
+	uint64_t size;
 };
 
 enum qwx_bdf_search {
@@ -1912,6 +2021,7 @@ struct qwx_softc {
 	int				qmi_cal_done;
 	struct qwx_qmi_ce_cfg		qmi_ce_cfg;
 	struct qwx_qmi_target_info	qmi_target;
+	struct qwx_qmi_dev_mem_info	qmi_dev_mem[ATH12K_QMI_WLFW_MAX_DEV_MEM_NUM_V01];
 	struct ath11k_targ_cap		target_caps;
 	int				num_radios;
 	uint32_t			cc_freq_hz;

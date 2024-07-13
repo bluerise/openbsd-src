@@ -6683,6 +6683,8 @@ struct qmi_wlanfw_host_cap_resp_msg_v01 {
 #define ATH11K_QMI_CALDB_SIZE			0x480000
 #define ATH11K_QMI_BDF_EXT_STR_LENGTH		0x20
 #define ATH11K_QMI_FW_MEM_REQ_SEGMENT_CNT	5
+#define ATH12K_QMI_WLFW_MAX_DEV_MEM_NUM_V01	4
+#define ATH12K_QMI_DEVMEM_CMEM_INDEX		0
 
 #define QMI_WLFW_REQUEST_MEM_IND_V01		0x0035
 #define QMI_WLFW_RESPOND_MEM_RESP_V01		0x0036
@@ -6825,6 +6827,11 @@ struct qmi_wlanfw_fw_version_info_s_v01 {
 	char fw_build_timestamp[QWX_QMI_WLANFW_MAX_TIMESTAMP_LEN_V01 + 1];
 };
 
+struct qmi_wlanfw_dev_mem_info_s_v01 {
+	uint64_t start;
+	uint64_t size;
+};
+
 enum qmi_wlanfw_cal_temp_id_enum_v01 {
 	QMI_WLANFW_CAL_TEMP_IDX_0_V01 = 0,
 	QMI_WLANFW_CAL_TEMP_IDX_1_V01 = 1,
@@ -6832,6 +6839,14 @@ enum qmi_wlanfw_cal_temp_id_enum_v01 {
 	QMI_WLANFW_CAL_TEMP_IDX_3_V01 = 3,
 	QMI_WLANFW_CAL_TEMP_IDX_4_V01 = 4,
 	QMI_WLANFW_CAL_TEMP_ID_MAX_V01 = 0xFF,
+};
+
+enum qmi_wlanfw_rd_card_chain_cap_v01 {
+	WLFW_RD_CARD_CHAIN_CAP_MIN_VAL_V01 = INT_MIN,
+	WLFW_RD_CARD_CHAIN_CAP_UNSPECIFIED_V01 = 0,
+	WLFW_RD_CARD_CHAIN_CAP_1x1_V01 = 1,
+	WLFW_RD_CARD_CHAIN_CAP_2x2_V01 = 2,
+	WLFW_RD_CARD_CHAIN_CAP_MAX_VAL_V01 = INT_MAX,
 };
 
 struct qmi_wlanfw_cap_resp_msg_v01 {
@@ -6856,6 +6871,12 @@ struct qmi_wlanfw_cap_resp_msg_v01 {
 	uint32_t otp_version;
 	uint8_t eeprom_read_timeout_valid;
 	uint32_t eeprom_read_timeout;
+	uint8_t fw_caps_valid;
+	uint64_t fw_caps;
+	uint8_t rd_card_chain_cap_valid;
+	enum qmi_wlanfw_rd_card_chain_cap_v01 rd_card_chain_cap;
+	uint8_t dev_mem_info_valid;
+	struct qmi_wlanfw_dev_mem_info_s_v01 dev_mem[ATH12K_QMI_WLFW_MAX_DEV_MEM_NUM_V01];
 };
 
 struct qmi_wlanfw_cap_req_msg_v01 {

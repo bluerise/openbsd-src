@@ -1144,7 +1144,7 @@ struct qwx_hp_update_timer {
 };
 
 struct ath12k_rx_desc_info {
-//	struct list_head list;
+	TAILQ_ENTRY(ath12k_rx_desc_info) entry;
 //	struct sk_buff *skb;
 	uint32_t cookie;
 	uint32_t magic;
@@ -1153,7 +1153,7 @@ struct ath12k_rx_desc_info {
 };
 
 struct ath12k_tx_desc_info {
-//	struct list_head list;
+	TAILQ_ENTRY(ath12k_tx_desc_info) entry;
 //	struct sk_buff *skb;
 	uint32_t desc_id; /* Cookie */
 	uint8_t mac_id;

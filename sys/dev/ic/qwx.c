@@ -11778,9 +11778,100 @@ qwx_dp_cmem_init(struct qwx_softc *sc, struct qwx_dp *dp,
 	return 0;
 }
 
+uint32_t ath12k_dp_cc_cookie_gen(uint16_t ppt_idx, uint16_t spt_idx)
+{
+	return (uint32_t)ppt_idx << ATH12K_CC_PPT_SHIFT | spt_idx;
+}
+
+void *ath12k_dp_cc_get_desc_addr_ptr(struct qwx_softc *sc,
+    uint16_t ppt_idx, uint16_t spt_idx)
+{
+	struct qwx_dp *dp = &sc->dp;
+
+	return QWX_DMA_KVA(dp->spt_info[ppt_idx].mem) + spt_idx;
+}
+
 int
 qwx_dp_cc_desc_init(struct qwx_softc *sc)
 {
+	struct qwx_dp *dp = &sc->dp;
+	struct ath12k_rx_desc_info *rx_descs, **rx_desc_addr;
+	struct ath12k_tx_desc_info *tx_descs, **tx_desc_addr;
+	uint32_t i, j, pool_id, tx_spt_page;
+	uint32_t ppt_idx;
+
+#ifdef notyet
+	spin_lock_bh(&dp->rx_desc_lock);
+#endif
+
+	/* First ATH12K_NUM_RX_SPT_PAGES of allocated SPT pages are used for RX */
+	for (i = 0; i < ATH12K_NUM_RX_SPT_PAGES; i++) {
+		rx_descs = mallocarray(ATH12K_MAX_SPT_ENTRIES, sizeof(*rx_descs),
+		    M_DEVBUF, M_NOWAIT | M_ZERO);
+
+		if (!rx_descs) {
+#ifdef notyet
+			spin_unlock_bh(&dp->rx_desc_lock);
+#endif
+			return ENOMEM;
+		}
+
+		ppt_idx = ATH12K_RX_SPT_PAGE_OFFSET + i;
+		dp->spt_info->rxbaddr[i] = &rx_descs[0];
+
+		for (j = 0; j < ATH12K_MAX_SPT_ENTRIES; j++) {
+			rx_descs[j].cookie = ath12k_dp_cc_cookie_gen(ppt_idx, j);
+			rx_descs[j].magic = ATH12K_DP_RX_DESC_MAGIC;
+			TAILQ_INSERT_TAIL(&dp->rx_desc_free_list,
+			    &rx_descs[j], entry);
+
+			/* Update descriptor VA in SPT */
+			rx_desc_addr = ath12k_dp_cc_get_desc_addr_ptr(sc, ppt_idx, j);
+			*rx_desc_addr = &rx_descs[j];
+		}
+	}
+
+#ifdef notyet
+	spin_unlock_bh(&dp->rx_desc_lock);
+#endif
+
+	for (pool_id = 0; pool_id < ATH11K_HW_MAX_QUEUES; pool_id++) {
+#ifdef notyet
+		spin_lock_bh(&dp->tx_desc_lock[pool_id]);
+#endif
+		for (i = 0; i < ATH12K_TX_SPT_PAGES_PER_POOL; i++) {
+			tx_descs = mallocarray(ATH12K_MAX_SPT_ENTRIES, sizeof(*tx_descs),
+			    M_DEVBUF, M_NOWAIT | M_ZERO);
+
+			if (!tx_descs) {
+#ifdef notyet
+				spin_unlock_bh(&dp->tx_desc_lock[pool_id]);
+#endif
+				/* Caller takes care of TX pending and RX desc cleanup */
+				return ENOMEM;
+			}
+
+			tx_spt_page = i + pool_id * ATH12K_TX_SPT_PAGES_PER_POOL;
+			ppt_idx = ATH12K_TX_SPT_PAGE_OFFSET + tx_spt_page;
+
+			dp->spt_info->txbaddr[tx_spt_page] = &tx_descs[0];
+
+			for (j = 0; j < ATH12K_MAX_SPT_ENTRIES; j++) {
+				tx_descs[j].desc_id = ath12k_dp_cc_cookie_gen(ppt_idx, j);
+				tx_descs[j].pool_id = pool_id;
+				TAILQ_INSERT_TAIL(&dp->tx_desc_free_list[pool_id],
+				    &tx_descs[j], entry);
+
+				/* Update descriptor VA in SPT */
+				tx_desc_addr =
+					ath12k_dp_cc_get_desc_addr_ptr(sc, ppt_idx, j);
+				*tx_desc_addr = &tx_descs[j];
+			}
+		}
+#ifdef notyet
+		spin_unlock_bh(&dp->tx_desc_lock[pool_id]);
+#endif
+	}
 	return 0;
 }
 
@@ -11884,21 +11975,6 @@ qwx_dp_deinit_bank_profiles(struct qwx_softc *sc)
 }
 
 int
-qwx_dp_reoq_lut_setup(struct qwx_softc *sc)
-{
-	if (!QWX_IS_ATH12K(sc))
-		return 0;
-
-	return 0;
-}
-
-void
-qwx_dp_reoq_lut_cleanup(struct qwx_softc *sc)
-{
-	// FIXME
-}
-
-int
 qwx_dp_alloc(struct qwx_softc *sc)
 {
 	struct qwx_dp *dp = &sc->dp;
@@ -11949,10 +12025,6 @@ qwx_dp_alloc(struct qwx_softc *sc)
 	if (ret)
 		goto fail_dp_bank_profiles_cleanup;
 
-	ret = qwx_dp_reoq_lut_setup(sc);
-	if (ret)
-		goto fail_cmn_srng_cleanup;
-
 	size = sizeof(struct hal_wbm_release_ring) * DP_TX_COMP_RING_SIZE;
 
 	for (i = 0; i < sc->hw_params.max_tx_ring; i++) {
@@ -11973,7 +12045,7 @@ qwx_dp_alloc(struct qwx_softc *sc)
 		    M_NOWAIT | M_ZERO);
 		if (!dp->tx_ring[i].tx_status) {
 			ret = ENOMEM;
-			goto fail_cmn_reoq_cleanup;
+			goto fail_cmn_srng_cleanup;
 		}
 	}
 
@@ -11986,8 +12058,6 @@ qwx_dp_alloc(struct qwx_softc *sc)
 	/* Init any SOC level resource for DP */
 
 	return 0;
-fail_cmn_reoq_cleanup:
-	qwx_dp_reoq_lut_cleanup(sc);
 fail_cmn_srng_cleanup:
 	qwx_dp_srng_common_cleanup(sc);
 fail_dp_bank_profiles_cleanup:

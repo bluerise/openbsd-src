@@ -4214,6 +4214,9 @@ static const struct qwx_hw_params qwx_hw_params[] = {
 		.target_ce_count = 9,
 		.svc_to_ce_map = qwx_target_service_to_ce_map_wlan_qca6390,
 		.svc_to_ce_map_len = 14,
+		.rxdma1_enable = false,
+		.num_rxmda_per_pdev = 2,
+		.num_rxdma_dst_ring = 1,
 		.credit_flow = true,
 		.max_tx_ring = DP_TCL_NUM_RING_MAX,
 		.cold_boot_calib = false,
@@ -11974,6 +11977,86 @@ qwx_dp_deinit_bank_profiles(struct qwx_softc *sc)
 	// FIXME
 }
 
+int qwx_dp_rxdma_ring_buf_setup(struct qwx_softc *, struct dp_rxdma_ring *, uint32_t);
+
+int
+qwx_dp_rxdma_buf_setup(struct qwx_softc *sc)
+{
+	struct qwx_pdev_dp *dp = &sc->pdev_dp;
+	struct dp_rxdma_ring *rx_ring;
+	int ret;
+
+	rx_ring = &dp->rx_refill_buf_ring;
+	ret = qwx_dp_rxdma_ring_buf_setup(sc, rx_ring, HAL_RXDMA_BUF);
+	if (ret)
+		return ret;
+
+	return 0;
+}
+
+int
+qwx_dp_rx_alloc(struct qwx_softc *sc)
+{
+	struct qwx_pdev_dp *dp = &sc->pdev_dp;
+	int i, ret;
+
+#if notyet
+	idr_init(&dp->rxdma_mon_buf_ring.bufs_idr);
+	spin_lock_init(&dp->rxdma_mon_buf_ring.idr_lock);
+
+	idr_init(&dp->tx_mon_buf_ring.bufs_idr);
+	spin_lock_init(&dp->tx_mon_buf_ring.idr_lock);
+#endif
+
+	ret = qwx_dp_srng_setup(sc, &dp->rx_refill_buf_ring.refill_buf_ring,
+	    HAL_RXDMA_BUF, 0, dp->mac_id, DP_RXDMA_BUF_RING_SIZE);
+	if (ret) {
+		printf("%s: failed to setup rx_refill_buf_ring\n",
+		    sc->sc_dev.dv_xname);
+		return ret;
+	}
+
+	if (sc->hw_params.rx_mac_buf_ring) {
+		for (i = 0; i < sc->hw_params.num_rxmda_per_pdev; i++) {
+			ret = qwx_dp_srng_setup(sc, &dp->rx_mac_buf_ring[i],
+			    HAL_RXDMA_BUF, 1, dp->mac_id + i, 2048);
+			if (ret) {
+				printf("%s: failed to setup "
+				    "rx_mac_buf_ring %d\n",
+				    sc->sc_dev.dv_xname, i);
+				return ret;
+			}
+		}
+	}
+
+	for (i = 0; i < sc->hw_params.num_rxdma_dst_ring; i++) {
+		ret = qwx_dp_srng_setup(sc, &dp->rxdma_err_dst_ring[i],
+		    HAL_RXDMA_BUF, 0, dp->mac_id + i,
+		    DP_RXDMA_ERR_DST_RING_SIZE);
+		if (ret) {
+			printf("%s: failed to setup "
+			    "rxdma_err_dst_Ring %d\n",
+			    sc->sc_dev.dv_xname, i);
+			return ret;
+		}
+	}
+
+	ret = qwx_dp_rxdma_buf_setup(sc);
+	if (ret) {
+		printf("%s: failed to setup rxdma ring\n",
+		    sc->sc_dev.dv_xname);
+		return ret;
+	}
+
+	return 0;
+}
+
+void
+qwx_dp_rx_free(struct qwx_softc *sc)
+{
+	/* FIXME */
+}
+
 int
 qwx_dp_alloc(struct qwx_softc *sc)
 {
@@ -12055,9 +12138,15 @@ qwx_dp_alloc(struct qwx_softc *sc)
 	for (i = 0; i < max_entries; i++)
 		qwx_hal_tx_set_dscp_tid_map(sc, i);
 
+	ret = qwx_dp_rx_alloc(sc);
+	if (ret)
+		goto fail_dp_rx_free;
+
 	/* Init any SOC level resource for DP */
 
 	return 0;
+fail_dp_rx_free:
+	qwx_dp_rx_free(sc);
 fail_cmn_srng_cleanup:
 	qwx_dp_srng_common_cleanup(sc);
 fail_dp_bank_profiles_cleanup:
@@ -16049,43 +16138,32 @@ int
 qwx_dp_rx_pdev_srng_alloc(struct qwx_softc *sc)
 {
 	struct qwx_pdev_dp *dp = &sc->pdev_dp;
-#if 0
 	struct dp_srng *srng = NULL;
-#endif
 	int i;
 	int ret;
 
-	ret = qwx_dp_srng_setup(sc, &dp->rx_refill_buf_ring.refill_buf_ring,
-	    HAL_RXDMA_BUF, 0, dp->mac_id, DP_RXDMA_BUF_RING_SIZE);
-	if (ret) {
-		printf("%s: failed to setup rx_refill_buf_ring\n",
-		    sc->sc_dev.dv_xname);
-		return ret;
-	}
-
-	if (sc->hw_params.rx_mac_buf_ring) {
-		for (i = 0; i < sc->hw_params.num_rxmda_per_pdev; i++) {
-			ret = qwx_dp_srng_setup(sc, &dp->rx_mac_buf_ring[i],
-			    HAL_RXDMA_BUF, 1, dp->mac_id + i, 1024);
-			if (ret) {
-				printf("%s: failed to setup "
-				    "rx_mac_buf_ring %d\n",
-				    sc->sc_dev.dv_xname, i);
-				return ret;
-			}
-		}
-	}
-
 	for (i = 0; i < sc->hw_params.num_rxmda_per_pdev; i++) {
-		ret = qwx_dp_srng_setup(sc, &dp->rxdma_err_dst_ring[i],
-		    HAL_RXDMA_DST, 0, dp->mac_id + i,
-		    DP_RXDMA_ERR_DST_RING_SIZE);
+		srng = &dp->rxdma_mon_dst_ring[i];
+		ret = qwx_dp_srng_setup(sc, srng, HAL_RXDMA_MONITOR_DST, 0,
+		    dp->mac_id + i, DP_RXDMA_MONITOR_DST_RING_SIZE);
 		if (ret) {
-			printf("%s: failed to setup rxdma_err_dst_ring %d\n",
-			   sc->sc_dev.dv_xname, i);
+			printf("%s: failed to setup "
+			    "rxdma_mon_dst_ring %d\n",
+			    sc->sc_dev.dv_xname, i);
+			return ret;
+		}
+
+		srng = &dp->tx_mon_dst_ring[i];
+		ret = qwx_dp_srng_setup(sc, srng, HAL_TX_MONITOR_DST, 0,
+		    dp->mac_id + i, DP_TX_MONITOR_DEST_RING_SIZE);
+		if (ret) {
+			printf("%s: failed to setup "
+			    "tx_mon_dst_ring %d\n",
+			    sc->sc_dev.dv_xname, i);
 			return ret;
 		}
 	}
+
 #if 0
 	for (i = 0; i < sc->hw_params.num_rxmda_per_pdev; i++) {
 		srng = &dp->rx_mon_status_refill_ring[i].refill_buf_ring;
@@ -16098,7 +16176,6 @@ qwx_dp_rx_pdev_srng_alloc(struct qwx_softc *sc)
 			return ret;
 		}
 	}
-#endif
 	/* if rxdma1_enable is false, then it doesn't need
 	 * to setup rxdam_mon_buf_ring, rxdma_mon_dst_ring
 	 * and rxdma_mon_desc_ring.
@@ -16108,7 +16185,7 @@ qwx_dp_rx_pdev_srng_alloc(struct qwx_softc *sc)
 		timeout_set(&sc->mon_reap_timer, qwx_dp_service_mon_ring, sc);
 		return 0;
 	}
-#if 0
+
 	ret = ath11k_dp_srng_setup(ar->ab,
 				   &dp->rxdma_mon_buf_ring.refill_buf_ring,
 				   HAL_RXDMA_MONITOR_BUF, 0, dp->mac_id,
@@ -16715,12 +16792,14 @@ qwx_dp_rx_pdev_alloc(struct qwx_softc *sc, int mac_id)
 		return ret;
 	}
 
+#if 0
 	ret = qwx_dp_rxdma_pdev_buf_setup(sc);
 	if (ret) {
 		printf("%s: failed to setup rxdma ring: %d\n",
 		    sc->sc_dev.dv_xname, ret);
 		return ret;
 	}
+#endif
 
 	ring_id = dp->rx_refill_buf_ring.refill_buf_ring.ring_id;
 	ret = qwx_dp_tx_htt_srng_setup(sc, ring_id, mac_id, HAL_RXDMA_BUF);
@@ -16728,20 +16807,6 @@ qwx_dp_rx_pdev_alloc(struct qwx_softc *sc, int mac_id)
 		printf("%s: failed to configure rx_refill_buf_ring: %d\n",
 		    sc->sc_dev.dv_xname, ret);
 		return ret;
-	}
-
-	if (sc->hw_params.rx_mac_buf_ring) {
-		for (i = 0; i < sc->hw_params.num_rxmda_per_pdev; i++) {
-			ring_id = dp->rx_mac_buf_ring[i].ring_id;
-			ret = qwx_dp_tx_htt_srng_setup(sc, ring_id,
-			    mac_id + i, HAL_RXDMA_BUF);
-			if (ret) {
-				printf("%s: failed to configure "
-				    "rx_mac_buf_ring%d: %d\n",
-				    sc->sc_dev.dv_xname, i, ret);
-				return ret;
-			}
-		}
 	}
 
 	for (i = 0; i < sc->hw_params.num_rxmda_per_pdev; i++) {

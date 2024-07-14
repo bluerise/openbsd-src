@@ -206,6 +206,7 @@ struct qwx_hw_params {
 
 	bool rxdma1_enable;
 	int num_rxmda_per_pdev;
+	int num_rxdma_dst_ring;
 	bool rx_mac_buf_ring;
 	bool vdev_start_delay;
 	bool htt_peer_map_v2;
@@ -1813,7 +1814,8 @@ struct qwx_pdev_dp {
 	struct dp_rxdma_ring rx_refill_buf_ring;
 	struct dp_srng rx_mac_buf_ring[MAX_RXDMA_PER_PDEV];
 	struct dp_srng rxdma_err_dst_ring[MAX_RXDMA_PER_PDEV];
-	struct dp_srng rxdma_mon_dst_ring;
+	struct dp_srng rxdma_mon_dst_ring[MAX_RXDMA_PER_PDEV];
+	struct dp_srng tx_mon_dst_ring[MAX_RXDMA_PER_PDEV];
 	struct dp_srng rxdma_mon_desc_ring;
 	struct dp_rxdma_ring rxdma_mon_buf_ring;
 	struct dp_rxdma_ring rx_mon_status_refill_ring[MAX_RXDMA_PER_PDEV];

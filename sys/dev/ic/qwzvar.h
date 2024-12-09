@@ -308,6 +308,7 @@ struct ath12k_hw_ops {
 	uint8_t* (*rx_desc_mpdu_start_addr2)(struct hal_rx_desc *desc);
 	uint32_t (*get_ring_selector)(struct sk_buff *skb);
 #endif
+	bool (*dp_srng_is_tx_comp_ring)(int ring_num);
 };
 
 extern const struct ath12k_hw_ring_mask ath12k_hw_ring_mask_wcn7850;

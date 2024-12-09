@@ -1694,10 +1694,19 @@ qwz_hw_get_mac_from_pdev_id(struct qwz_softc *sc, int pdev_idx)
 	return 0;
 }
 
+static bool qwz_dp_srng_is_comp_ring_wcn7850(int ring_num)
+{
+	if (ring_num == 0 || ring_num == 2 || ring_num == 4)
+		return true;
+
+	return false;
+}
+
 const struct ath12k_hw_ops wcn7850_ops = {
 	.get_hw_mac_from_pdev_id = qwz_hw_qcn9274_mac_from_pdev_id,
 	.mac_id_to_pdev_id = qwz_hw_mac_id_to_pdev_id_wcn7850,
 	.mac_id_to_srng_id = qwz_hw_mac_id_to_srng_id_wcn7850,
+	.dp_srng_is_tx_comp_ring = qwz_dp_srng_is_comp_ring_wcn7850,
 };
 
 #define ATH12K_TX_RING_MASK_0 BIT(0)
@@ -7355,42 +7364,16 @@ qwz_dp_srng_setup(struct qwz_softc *sc, struct dp_srng *ring,
 	uint16_t entry_sz = qwz_hal_srng_get_entrysize(sc, type);
 	uint32_t max_entries = qwz_hal_srng_get_max_entries(sc, type);
 	int ret;
-	int cached = 0;
 
 	if (num_entries > max_entries)
 		num_entries = max_entries;
 
 	ring->size = (num_entries * entry_sz) + HAL_RING_BASE_ALIGN - 1;
-
-#ifdef notyet
-	if (sc->hw_params.alloc_cacheable_memory) {
-		/* Allocate the reo dst and tx completion rings from cacheable memory */
-		switch (type) {
-		case HAL_REO_DST:
-		case HAL_WBM2SW_RELEASE:
-			cached = true;
-			break;
-		default:
-			cached = false;
-		}
-
-		if (cached) {
-			ring->vaddr_unaligned = kzalloc(ring->size, GFP_KERNEL);
-			ring->paddr_unaligned = virt_to_phys(ring->vaddr_unaligned);
-		}
-		if (!ring->vaddr_unaligned)
-			return -ENOMEM;
-	}
-#endif
-	if (!cached) {
-		ring->mem = qwz_dmamem_alloc(sc->sc_dmat, ring->size,
-		    PAGE_SIZE);
-		if (ring->mem == NULL) {
-			printf("%s: could not allocate DP SRNG DMA memory\n",
-			    sc->sc_dev.dv_xname);
-			return ENOMEM;
-
-		}
+	ring->mem = qwz_dmamem_alloc(sc->sc_dmat, ring->size, PAGE_SIZE);
+	if (ring->mem == NULL) {
+		printf("%s: could not allocate DP SRNG DMA memory\n",
+		    sc->sc_dev.dv_xname);
+		return ENOMEM;
 	}
 
 	ring->vaddr = QWZ_DMA_KVA(ring->mem);
@@ -7422,14 +7405,14 @@ qwz_dp_srng_setup(struct qwz_softc *sc, struct dp_srng *ring,
 		params.intr_timer_thres_us = HAL_SRNG_INT_TIMER_THRESHOLD_RX;
 		break;
 	case HAL_WBM2SW_RELEASE:
-		if (ring_num < 3) {
+		if (sc->hw_params.hw_ops->dp_srng_is_tx_comp_ring(ring_num)) {
 			params.intr_batch_cntr_thres_entries =
 			    HAL_SRNG_INT_BATCH_THRESHOLD_TX;
 			params.intr_timer_thres_us =
 			    HAL_SRNG_INT_TIMER_THRESHOLD_TX;
 			break;
 		}
-		/* follow through when ring_num >= 3 */
+		/* follow through when ring_num != HAL_WBM2SW_REL_ERR_RING_NUM */
 		/* FALLTHROUGH */
 	case HAL_REO_EXCEPTION:
 	case HAL_REO_REINJECT:

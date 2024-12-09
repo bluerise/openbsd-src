@@ -7668,13 +7668,13 @@ qwz_hal_setup_link_idle_list(struct qwz_softc *sc,
 
 void
 qwz_hal_set_link_desc_addr(struct hal_wbm_link_desc *desc, uint32_t cookie,
-    bus_addr_t paddr)
+    bus_addr_t paddr, enum hal_rx_buf_return_buf_manager rbm)
 {
 	desc->buf_addr_info.info0 = FIELD_PREP(BUFFER_ADDR_INFO0_ADDR,
 	    (paddr & HAL_ADDR_LSB_REG_MASK));
 	desc->buf_addr_info.info1 = FIELD_PREP(BUFFER_ADDR_INFO1_ADDR,
 	    ((uint64_t)paddr >> HAL_ADDR_MSB_REG_SHIFT)) |
-	    FIELD_PREP(BUFFER_ADDR_INFO1_RET_BUF_MGR, 1) |
+	    FIELD_PREP(BUFFER_ADDR_INFO1_RET_BUF_MGR, rbm) |
 	    FIELD_PREP(BUFFER_ADDR_INFO1_SW_COOKIE, cookie);
 }
 
@@ -7713,6 +7713,7 @@ qwz_dp_scatter_idle_link_desc_setup(struct qwz_softc *sc, int size,
 	int ret = 0;
 	uint32_t end_offset;
 	uint32_t cookie;
+	enum hal_rx_buf_return_buf_manager rbm = dp->idle_link_rbm;
 
 	n_entries_per_buf = HAL_WBM_IDLE_SCATTER_BUF_SIZE /
 	    qwz_hal_srng_get_entrysize(sc, HAL_WBM_IDLE_LINK);
@@ -7742,7 +7743,8 @@ qwz_dp_scatter_idle_link_desc_setup(struct qwz_softc *sc, int size,
 		paddr = link_desc_banks[i].paddr;
 		while (n_entries) {
 			cookie = DP_LINK_DESC_COOKIE_SET(n_entries, i);
-			qwz_hal_set_link_desc_addr(scatter_buf, cookie, paddr);
+			qwz_hal_set_link_desc_addr(scatter_buf, cookie, paddr,
+			    rbm);
 			n_entries--;
 			paddr += HAL_LINK_DESC_SIZE;
 			if (rem_entries) {
@@ -7835,6 +7837,7 @@ qwz_dp_link_desc_setup(struct qwz_softc *sc,
 	uint64_t paddr;
 	uint32_t *desc;
 	int i, ret;
+	enum hal_rx_buf_return_buf_manager rbm = sc->dp.idle_link_rbm;
 
 	tot_mem_sz = n_link_desc * HAL_LINK_DESC_SIZE;
 	tot_mem_sz += HAL_LINK_DESC_ALIGN;
@@ -7889,7 +7892,7 @@ qwz_dp_link_desc_setup(struct qwz_softc *sc,
 		while (n_entries &&
 		    (desc = qwz_hal_srng_src_get_next_entry(sc, srng))) {
 			qwz_hal_set_link_desc_addr(
-			    (struct hal_wbm_link_desc *) desc, i, paddr);
+			    (struct hal_wbm_link_desc *) desc, i, paddr, rbm);
 			n_entries--;
 			paddr += HAL_LINK_DESC_SIZE;
 		}

@@ -7939,77 +7939,6 @@ qwz_dp_srng_cleanup(struct qwz_softc *sc, struct dp_srng *ring)
 }
 
 void
-qwz_dp_shadow_stop_timer(struct qwz_softc *sc,
-    struct qwz_hp_update_timer *update_timer)
-{
-	if (!sc->hw_params.supports_shadow_regs)
-		return;
-
-	timeout_del(&update_timer->timer);
-}
-
-void
-qwz_dp_shadow_start_timer(struct qwz_softc *sc, struct hal_srng *srng,
-    struct qwz_hp_update_timer *update_timer)
-{
-#ifdef notyet
-	lockdep_assert_held(&srng->lock);
-#endif
-	if (!sc->hw_params.supports_shadow_regs)
-		return;
-
-	update_timer->tx_num++;
-	if (update_timer->started)
-		return;
-
-	update_timer->started = 1;
-	update_timer->timer_tx_num = update_timer->tx_num;
-
-	timeout_add_msec(&update_timer->timer, update_timer->interval);
-}
-
-void
-qwz_dp_shadow_timer_handler(void *arg)
-{
-	struct qwz_hp_update_timer *update_timer = arg;
-	struct qwz_softc *sc = update_timer->sc;
-	struct hal_srng	*srng = &sc->hal.srng_list[update_timer->ring_id];
-	int s;
-
-#ifdef notyet
-	spin_lock_bh(&srng->lock);
-#endif
-	s = splnet();
-
-	/*
-	 * Update HP if there were no TX operations during the timeout interval,
-	 * and stop the timer. Timer will be restarted if more TX happens.
-	 */
-	if (update_timer->timer_tx_num != update_timer->tx_num) {
-		update_timer->timer_tx_num = update_timer->tx_num;
-		timeout_add_msec(&update_timer->timer, update_timer->interval);
-	} else {
-		update_timer->started = 0;
-		qwz_hal_srng_shadow_update_hp_tp(sc, srng);
-	}
-#ifdef notyet
-	spin_unlock_bh(&srng->lock);
-#endif
-	splx(s);
-}
-
-void
-qwz_dp_stop_shadow_timers(struct qwz_softc *sc)
-{
-	int i;
-
-	for (i = 0; i < sc->hw_params.max_tx_ring; i++)
-		qwz_dp_shadow_stop_timer(sc, &sc->dp.tx_ring_timer[i]);
-
-	qwz_dp_shadow_stop_timer(sc, &sc->dp.reo_cmd_timer);
-}
-
-void
 qwz_dp_srng_common_cleanup(struct qwz_softc *sc)
 {
 	struct qwz_dp *dp = &sc->dp;
@@ -8147,24 +8076,6 @@ qwz_hal_tx_set_dscp_tid_map(struct qwz_softc *sc, int id)
 	ctrl_reg_val &= ~HAL_TCL1_RING_CMN_CTRL_DSCP_TID_MAP_PROG_EN;
 	sc->ops.write32(sc, HAL_SEQ_WCSS_UMAC_TCL_REG +
 	    HAL_TCL1_RING_CMN_CTRL_REG, ctrl_reg_val);
-}
-
-void
-qwz_dp_shadow_init_timer(struct qwz_softc *sc,
-    struct qwz_hp_update_timer *update_timer,
-    uint32_t interval, uint32_t ring_id)
-{
-	if (!sc->hw_params.supports_shadow_regs)
-		return;
-
-	update_timer->tx_num = 0;
-	update_timer->timer_tx_num = 0;
-	update_timer->sc = sc;
-	update_timer->ring_id = ring_id;
-	update_timer->interval = interval;
-	update_timer->init = 1;
-	timeout_set(&update_timer->timer, qwz_dp_shadow_timer_handler,
-	    update_timer);
 }
 
 void
@@ -19694,26 +19605,6 @@ qwz_ce_free_ring(struct qwz_softc *sc, struct qwz_ce_ring *ring)
 	free(ring, M_DEVBUF, size);
 }
 
-static inline int
-qwz_ce_need_shadow_fix(int ce_id)
-{
-	/* only ce4 needs shadow workaround */
-	return (ce_id == 4);
-}
-
-void
-qwz_ce_stop_shadow_timers(struct qwz_softc *sc)
-{
-	int i;
-
-	if (!sc->hw_params.supports_shadow_regs)
-		return;
-
-	for (i = 0; i < sc->hw_params.ce_count; i++)
-		if (qwz_ce_need_shadow_fix(i))
-			qwz_dp_shadow_stop_timer(sc, &sc->ce.hp_timer[i]);
-}
-
 void
 qwz_ce_free_pipes(struct qwz_softc *sc)
 {
@@ -20096,11 +19987,6 @@ qwz_ce_init_ring(struct qwz_softc *sc, struct qwz_ce_ring *ce_ring,
 	}
 
 	ce_ring->hal_ring_id = ret;
-
-	if (sc->hw_params.supports_shadow_regs &&
-	    qwz_ce_need_shadow_fix(ce_id))
-		qwz_dp_shadow_init_timer(sc, &sc->ce.hp_timer[ce_id],
-		    ATH12K_SHADOW_CTRL_TIMER_INTERVAL, ce_ring->hal_ring_id);
 
 	return 0;
 }

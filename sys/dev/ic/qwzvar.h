@@ -1266,7 +1266,6 @@ struct qwz_ce {
 	/* Protects rings of all ce pipes */
 	spinlock_t ce_lock;
 #endif
-	struct qwz_hp_update_timer hp_timer[CE_COUNT_MAX];
 };
 
 

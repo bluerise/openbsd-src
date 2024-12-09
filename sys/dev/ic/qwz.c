@@ -7774,10 +7774,10 @@ err:
 	return ret;
 }
 
-uint32_t *
+void *
 qwz_hal_srng_src_get_next_entry(struct qwz_softc *sc, struct hal_srng *srng)
 {
-	uint32_t *desc;
+	void *desc;
 	uint32_t next_hp;
 #ifdef notyet
 	lockdep_assert_held(&srng->lock);
@@ -8739,19 +8739,25 @@ qwz_dp_deinit_bank_profiles(struct qwz_softc *sc)
 	dp->bank_profiles = NULL;
 }
 
-int qwz_dp_rxdma_ring_buf_setup(struct qwz_softc *, struct dp_rxdma_ring *, uint32_t);
+int qwz_dp_rxdma_mon_ring_buf_setup(struct qwz_softc *, struct dp_rxdma_mon_ring *, uint32_t);
+int qwz_dp_rxdma_ring_buf_setup(struct qwz_softc *, struct dp_rxdma_ring *);
 
 int
 qwz_dp_rxdma_buf_setup(struct qwz_softc *sc)
 {
-	struct qwz_pdev_dp *dp = &sc->pdev_dp;
-	struct dp_rxdma_ring *rx_ring;
+	struct qwz_dp *dp = &sc->dp;
 	int ret;
 
-	rx_ring = &dp->rx_refill_buf_ring;
-	ret = qwz_dp_rxdma_ring_buf_setup(sc, rx_ring, HAL_RXDMA_BUF);
+	ret = qwz_dp_rxdma_ring_buf_setup(sc, &dp->rx_refill_buf_ring);
 	if (ret)
 		return ret;
+
+	if (sc->hw_params.rxdma1_enable) {
+		ret = qwz_dp_rxdma_mon_ring_buf_setup(sc,
+		    &dp->rxdma_mon_buf_ring, HAL_RXDMA_MONITOR_BUF);
+		if (ret)
+			return ret;
+	}
 
 	return 0;
 }
@@ -8759,7 +8765,7 @@ qwz_dp_rxdma_buf_setup(struct qwz_softc *sc)
 int
 qwz_dp_rx_alloc(struct qwz_softc *sc)
 {
-	struct qwz_pdev_dp *dp = &sc->pdev_dp;
+	struct qwz_dp *dp = &sc->dp;
 	int i, ret;
 
 #if notyet
@@ -8771,7 +8777,7 @@ qwz_dp_rx_alloc(struct qwz_softc *sc)
 #endif
 
 	ret = qwz_dp_srng_setup(sc, &dp->rx_refill_buf_ring.refill_buf_ring,
-	    HAL_RXDMA_BUF, 0, dp->mac_id, DP_RXDMA_BUF_RING_SIZE);
+	    HAL_RXDMA_BUF, 0, 0, DP_RXDMA_BUF_RING_SIZE);
 	if (ret) {
 		printf("%s: failed to setup rx_refill_buf_ring\n",
 		    sc->sc_dev.dv_xname);
@@ -8781,7 +8787,7 @@ qwz_dp_rx_alloc(struct qwz_softc *sc)
 	if (sc->hw_params.rx_mac_buf_ring) {
 		for (i = 0; i < sc->hw_params.num_rxmda_per_pdev; i++) {
 			ret = qwz_dp_srng_setup(sc, &dp->rx_mac_buf_ring[i],
-			    HAL_RXDMA_BUF, 1, dp->mac_id + i, 2048);
+			    HAL_RXDMA_BUF, 1, i, 2048);
 			if (ret) {
 				printf("%s: failed to setup "
 				    "rx_mac_buf_ring %d\n",
@@ -8793,12 +8799,21 @@ qwz_dp_rx_alloc(struct qwz_softc *sc)
 
 	for (i = 0; i < sc->hw_params.num_rxdma_dst_ring; i++) {
 		ret = qwz_dp_srng_setup(sc, &dp->rxdma_err_dst_ring[i],
-		    HAL_RXDMA_BUF, 0, dp->mac_id + i,
-		    DP_RXDMA_ERR_DST_RING_SIZE);
+		    HAL_RXDMA_BUF, 0, i, DP_RXDMA_ERR_DST_RING_SIZE);
 		if (ret) {
 			printf("%s: failed to setup "
-			    "rxdma_err_dst_Ring %d\n",
+			    "rxdma_err_dst_ring %d\n",
 			    sc->sc_dev.dv_xname, i);
+			return ret;
+		}
+	}
+
+	if (sc->hw_params.rxdma1_enable) {
+		ret = qwz_dp_srng_setup(sc, &dp->rxdma_mon_buf_ring.refill_buf_ring,
+		    HAL_RXDMA_MONITOR_BUF, 0, 0, DP_RXDMA_BUF_RING_SIZE);
+		if (ret) {
+			printf("%s: failed to setup HAL_RXDMA_MONITOR_BUF\n",
+			    sc->sc_dev.dv_xname);
 			return ret;
 		}
 	}
@@ -12908,18 +12923,8 @@ qwz_dp_rx_pdev_srng_free(struct qwz_softc *sc, int mac_id)
 	struct qwz_pdev_dp *dp = &sc->pdev_dp;
 	int i;
 
-	qwz_dp_srng_cleanup(sc, &dp->rx_refill_buf_ring.refill_buf_ring);
-
-	for (i = 0; i < sc->hw_params.num_rxmda_per_pdev; i++) {
-		if (sc->hw_params.rx_mac_buf_ring)
-			qwz_dp_srng_cleanup(sc, &dp->rx_mac_buf_ring[i]);
-
-		qwz_dp_srng_cleanup(sc, &dp->rxdma_err_dst_ring[i]);
-		qwz_dp_srng_cleanup(sc,
-		    &dp->rx_mon_status_refill_ring[i].refill_buf_ring);
-	}
-
-	qwz_dp_srng_cleanup(sc, &dp->rxdma_mon_buf_ring.refill_buf_ring);
+	for (i = 0; i < sc->hw_params.num_rxmda_per_pdev; i++)
+		qwz_dp_srng_cleanup(sc, &dp->rxdma_mon_dst_ring[i]);
 }
 
 int
@@ -13006,7 +13011,8 @@ qwz_dp_rx_pdev_srng_alloc(struct qwz_softc *sc)
 }
 
 void
-qwz_dp_rxdma_buf_ring_free(struct qwz_softc *sc, struct dp_rxdma_ring *rx_ring)
+qwz_dp_rxdma_mon_buf_ring_free(struct qwz_softc *sc,
+    struct dp_rxdma_mon_ring *rx_ring)
 {
 	int i;
 
@@ -13031,24 +13037,6 @@ qwz_dp_rxdma_buf_ring_free(struct qwz_softc *sc, struct dp_rxdma_ring *rx_ring)
 	rx_ring->rx_data = NULL;
 	rx_ring->bufs_max = 0;
 	memset(rx_ring->freemap, 0xff, sizeof(rx_ring->freemap));
-}
-
-void
-qwz_dp_rxdma_pdev_buf_free(struct qwz_softc *sc, int mac_id)
-{
-	struct qwz_pdev_dp *dp = &sc->pdev_dp;
-	struct dp_rxdma_ring *rx_ring = &dp->rx_refill_buf_ring;
-	int i;
-
-	qwz_dp_rxdma_buf_ring_free(sc, rx_ring);
-
-	rx_ring = &dp->rxdma_mon_buf_ring;
-	qwz_dp_rxdma_buf_ring_free(sc, rx_ring);
-
-	for (i = 0; i < sc->hw_params.num_rxmda_per_pdev; i++) {
-		rx_ring = &dp->rx_mon_status_refill_ring[i];
-		qwz_dp_rxdma_buf_ring_free(sc, rx_ring);
-	}
 }
 
 void
@@ -13080,7 +13068,7 @@ qwz_hal_rx_buf_addr_info_get(void *desc, uint64_t *paddr, uint32_t *cookie,
 }
 
 int
-qwz_next_free_rxbuf_idx(struct dp_rxdma_ring *rx_ring)
+qwz_next_free_rxbuf_idx(struct dp_rxdma_mon_ring *rx_ring)
 {
 	int i, idx;
 
@@ -13094,36 +13082,23 @@ qwz_next_free_rxbuf_idx(struct dp_rxdma_ring *rx_ring)
 }
 
 int
-qwz_dp_rxbufs_replenish(struct qwz_softc *sc, int mac_id,
-    struct dp_rxdma_ring *rx_ring, int req_entries,
-    enum hal_rx_buf_return_buf_manager mgr)
+qwz_dp_mon_buf_replenish(struct qwz_softc *sc,
+    struct dp_rxdma_mon_ring *buf_ring, int req_entries)
 {
 	struct hal_srng *srng;
-	uint32_t *desc;
+	struct hal_mon_buf_ring *mon_buf;
 	struct mbuf *m;
-	int num_free;
-	int num_remain;
 	int ret, idx;
-	uint32_t cookie;
 	uint64_t paddr;
 	struct qwz_rx_data *rx_data;
 
-	req_entries = MIN(req_entries, rx_ring->bufs_max);
-
-	srng = &sc->hal.srng_list[rx_ring->refill_buf_ring.ring_id];
+	srng = &sc->hal.srng_list[buf_ring->refill_buf_ring.ring_id];
 #ifdef notyet
 	spin_lock_bh(&srng->lock);
 #endif
 	qwz_hal_srng_access_begin(sc, srng);
 
-	num_free = qwz_hal_srng_src_num_free(sc, srng, 1);
-	if (!req_entries && (num_free > (rx_ring->bufs_max * 3) / 4))
-		req_entries = num_free;
-
-	req_entries = MIN(num_free, req_entries);
-	num_remain = req_entries;
-
-	while (num_remain > 0) {
+	while (req_entries > 0) {
 		const size_t size = DP_RX_BUFFER_SIZE;
 
 		m = m_gethdr(M_DONTWAIT, MT_DATA);
@@ -13139,11 +13114,11 @@ qwz_dp_rxbufs_replenish(struct qwz_softc *sc, int mac_id,
 
 		m->m_len = m->m_pkthdr.len = size;
 
-		idx = qwz_next_free_rxbuf_idx(rx_ring);
+		idx = qwz_next_free_rxbuf_idx(buf_ring);
 		if (idx == -1)
 			goto fail_free_mbuf;
 
-		rx_data = &rx_ring->rx_data[idx];
+		rx_data = &buf_ring->rx_data[idx];
 		if (rx_data->map == NULL) {
 			ret = bus_dmamap_create(sc->sc_dmat, size, 1,
 			    size, 0, BUS_DMA_NOWAIT, &rx_data->map);
@@ -13159,21 +13134,20 @@ qwz_dp_rxbufs_replenish(struct qwz_softc *sc, int mac_id,
 			goto fail_free_mbuf;
 		}
 
-		desc = qwz_hal_srng_src_get_next_entry(sc, srng);
-		if (!desc)
+		mon_buf = qwz_hal_srng_src_get_next_entry(sc, srng);
+		if (!mon_buf)
 			goto fail_dma_unmap;
 
 		rx_data->m = m;
 		m = NULL;
 
-		cookie = FIELD_PREP(DP_RXDMA_BUF_COOKIE_PDEV_ID, mac_id) |
-		    FIELD_PREP(DP_RXDMA_BUF_COOKIE_BUF_ID, idx);
-
-		clrbit(rx_ring->freemap, idx);
-		num_remain--;
+		clrbit(buf_ring->freemap, idx);
+		req_entries--;
 
 		paddr = rx_data->map->dm_segs[0].ds_addr;
-		qwz_hal_rx_buf_addr_info_set(desc, paddr, cookie, mgr);
+		mon_buf->paddr_lo = htole32(paddr);
+		mon_buf->paddr_hi = htole32(paddr >> 32);
+		mon_buf->cookie = FIELD_PREP(DP_RXDMA_BUF_COOKIE_BUF_ID, idx);
 	}
 
 	qwz_hal_srng_access_end(sc, srng);
@@ -13195,10 +13169,130 @@ fail_free_mbuf:
 }
 
 int
-qwz_dp_rxdma_ring_buf_setup(struct qwz_softc *sc,
-    struct dp_rxdma_ring *rx_ring, uint32_t ringtype)
+qwz_dp_rxbufs_replenish(struct qwz_softc *sc,
+    struct dp_rxdma_ring *rx_ring, void *list,
+    int req_entries)
 {
-	struct qwz_pdev_dp *dp = &sc->pdev_dp;
+	struct qwz_dp *dp = &sc->dp;
+	TAILQ_HEAD(, ath12k_rx_desc_info) *used_list = list;
+	struct hal_srng *srng;
+	uint32_t *desc;
+	struct mbuf *m;
+	int num_free;
+	int num_remain;
+	int num_cut;
+	int ret, i;
+	uint32_t cookie;
+	uint64_t paddr;
+	struct ath12k_rx_desc_info *rx_desc;
+	enum hal_rx_buf_return_buf_manager mgr = sc->hw_params.hal_params->rx_buf_rbm;
+
+	req_entries = MIN(req_entries, rx_ring->bufs_max);
+
+	srng = &sc->hal.srng_list[rx_ring->refill_buf_ring.ring_id];
+#ifdef notyet
+	spin_lock_bh(&srng->lock);
+#endif
+	qwz_hal_srng_access_begin(sc, srng);
+
+	num_free = qwz_hal_srng_src_num_free(sc, srng, 1);
+	if (!req_entries && (num_free > (rx_ring->bufs_max * 3) / 4))
+		req_entries = num_free;
+
+	req_entries = MIN(num_free, req_entries);
+	num_remain = req_entries;
+
+	if (!num_remain) {
+		qwz_hal_srng_access_end(sc, srng);
+#ifdef notyet
+		spin_unlock_bh(&srng->lock);
+#endif
+		return 0;
+	}
+
+	for (i = 0, num_cut = 0; i < num_remain; i++) {
+		if (TAILQ_EMPTY(&dp->rx_desc_free_list))
+			break;
+		rx_desc = TAILQ_FIRST(&dp->rx_desc_free_list);
+		TAILQ_REMOVE(&dp->rx_desc_free_list, rx_desc, entry);
+		TAILQ_INSERT_TAIL(used_list, rx_desc, entry);
+		num_cut++;
+	}
+
+	while (num_remain > 0) {
+		const size_t size = DP_RX_BUFFER_SIZE;
+
+		m = m_gethdr(M_DONTWAIT, MT_DATA);
+		if (m == NULL)
+			goto fail_free_mbuf;
+
+		if (size <= MCLBYTES)
+			MCLGET(m, M_DONTWAIT);
+		else
+			MCLGETL(m, M_DONTWAIT, size);
+		if ((m->m_flags & M_EXT) == 0)
+			goto fail_free_mbuf;
+
+		m->m_len = m->m_pkthdr.len = size;
+
+		rx_desc = TAILQ_FIRST(used_list);
+		if (rx_desc == NULL)
+			goto fail_free_mbuf;
+
+		if (rx_desc->map == NULL) {
+			ret = bus_dmamap_create(sc->sc_dmat, size, 1,
+			    size, 0, BUS_DMA_NOWAIT, &rx_desc->map);
+			if (ret)
+				goto fail_free_mbuf;
+		}
+
+		ret = bus_dmamap_load_mbuf(sc->sc_dmat, rx_desc->map, m,
+		    BUS_DMA_READ | BUS_DMA_NOWAIT);
+		if (ret) {
+			printf("%s: can't map mbuf (error %d)\n",
+			    sc->sc_dev.dv_xname, ret);
+			goto fail_free_mbuf;
+		}
+
+		cookie = rx_desc->cookie;
+
+		desc = qwz_hal_srng_src_get_next_entry(sc, srng);
+		if (!desc)
+			goto fail_dma_unmap;
+
+		TAILQ_REMOVE(used_list, rx_desc, entry);
+
+		rx_desc->m = m;
+		m = NULL;
+
+		num_remain--;
+
+		paddr = rx_desc->map->dm_segs[0].ds_addr;
+		qwz_hal_rx_buf_addr_info_set(desc, paddr, cookie, mgr);
+	}
+
+	qwz_hal_srng_access_end(sc, srng);
+#ifdef notyet
+	spin_unlock_bh(&srng->lock);
+#endif
+	return 0;
+
+fail_dma_unmap:
+	bus_dmamap_unload(sc->sc_dmat, rx_desc->map);
+fail_free_mbuf:
+	m_free(m);
+
+	qwz_hal_srng_access_end(sc, srng);
+#ifdef notyet
+	spin_unlock_bh(&srng->lock);
+#endif
+	return ENOBUFS;
+}
+
+int
+qwz_dp_rxdma_mon_ring_buf_setup(struct qwz_softc *sc,
+    struct dp_rxdma_mon_ring *rx_ring, uint32_t ringtype)
+{
 	int num_entries;
 
 	num_entries = rx_ring->refill_buf_ring.size /
@@ -13212,42 +13306,24 @@ qwz_dp_rxdma_ring_buf_setup(struct qwz_softc *sc,
 
 	rx_ring->bufs_max = num_entries;
 	memset(rx_ring->freemap, 0xff, sizeof(rx_ring->freemap));
+	qwz_dp_mon_buf_replenish(sc, rx_ring, num_entries);
 
-	return qwz_dp_rxbufs_replenish(sc, dp->mac_id, rx_ring, num_entries,
-	    sc->hw_params.hal_params->rx_buf_rbm);
+	return 0;
 }
 
 int
-qwz_dp_rxdma_pdev_buf_setup(struct qwz_softc *sc)
+qwz_dp_rxdma_ring_buf_setup(struct qwz_softc *sc,
+    struct dp_rxdma_ring *rx_ring)
 {
-	struct qwz_pdev_dp *dp = &sc->pdev_dp;
-	struct dp_rxdma_ring *rx_ring;
-	int ret;
-#if 0
-	int i;
-#endif
+	TAILQ_HEAD(, ath12k_rx_desc_info) list;
+	int num_entries;
 
-	rx_ring = &dp->rx_refill_buf_ring;
-	ret = qwz_dp_rxdma_ring_buf_setup(sc, rx_ring, HAL_RXDMA_BUF);
-	if (ret)
-		return ret;
+	TAILQ_INIT(&list);
+	num_entries = rx_ring->refill_buf_ring.size /
+	    qwz_hal_srng_get_entrysize(sc, HAL_RXDMA_BUF);
 
-	if (sc->hw_params.rxdma1_enable) {
-		rx_ring = &dp->rxdma_mon_buf_ring;
-		ret = qwz_dp_rxdma_ring_buf_setup(sc, rx_ring,
-		    HAL_RXDMA_MONITOR_BUF);
-		if (ret)
-			return ret;
-	}
-#if 0
-	for (i = 0; i < sc->hw_params.num_rxmda_per_pdev; i++) {
-		rx_ring = &dp->rx_mon_status_refill_ring[i];
-		ret = qwz_dp_rxdma_ring_buf_setup(sc, rx_ring,
-		    HAL_RXDMA_MONITOR_STATUS);
-		if (ret)
-			return ret;
-	}
-#endif
+	qwz_dp_rxbufs_replenish(sc, rx_ring, &list, 0);
+
 	return 0;
 }
 
@@ -13255,7 +13331,6 @@ void
 qwz_dp_rx_pdev_free(struct qwz_softc *sc, int mac_id)
 {
 	qwz_dp_rx_pdev_srng_free(sc, mac_id);
-	qwz_dp_rxdma_pdev_buf_free(sc, mac_id);
 }
 
 bus_addr_t
@@ -13567,6 +13642,9 @@ qwz_dp_rx_pdev_alloc(struct qwz_softc *sc, int mac_id)
 	int i;
 	int ret;
 
+	if (!sc->hw_params.rxdma1_enable)
+		return 0;
+
 	ret = qwz_dp_rx_pdev_srng_alloc(sc);
 	if (ret) {
 		printf("%s: failed to setup rx srngs: %d\n",
@@ -13574,77 +13652,18 @@ qwz_dp_rx_pdev_alloc(struct qwz_softc *sc, int mac_id)
 		return ret;
 	}
 
-#if 0
-	ret = qwz_dp_rxdma_pdev_buf_setup(sc);
-	if (ret) {
-		printf("%s: failed to setup rxdma ring: %d\n",
-		    sc->sc_dev.dv_xname, ret);
-		return ret;
-	}
-#endif
-
-	ring_id = dp->rx_refill_buf_ring.refill_buf_ring.ring_id;
-	ret = qwz_dp_tx_htt_srng_setup(sc, ring_id, mac_id, HAL_RXDMA_BUF);
-	if (ret) {
-		printf("%s: failed to configure rx_refill_buf_ring: %d\n",
-		    sc->sc_dev.dv_xname, ret);
-		return ret;
-	}
-
 	for (i = 0; i < sc->hw_params.num_rxmda_per_pdev; i++) {
-		ring_id = dp->rxdma_err_dst_ring[i].ring_id;
+		ring_id = dp->rxdma_mon_dst_ring[i].ring_id;
 		ret = qwz_dp_tx_htt_srng_setup(sc, ring_id, mac_id + i,
-		    HAL_RXDMA_DST);
+		    HAL_RXDMA_MONITOR_DST);
 		if (ret) {
 			printf("%s: failed to configure "
-			    "rxdma_err_dest_ring%d %d\n",
+			    "rxdma_mon_dst_ring %d %d\n",
 			    sc->sc_dev.dv_xname, i, ret);
 			return ret;
 		}
 	}
 
-	if (!sc->hw_params.rxdma1_enable)
-		goto config_refill_ring;
-#if 0
-	ring_id = dp->rxdma_mon_buf_ring.refill_buf_ring.ring_id;
-	ret = ath12k_dp_tx_htt_srng_setup(ab, ring_id,
-					  mac_id, HAL_RXDMA_MONITOR_BUF);
-	if (ret) {
-		ath12k_warn(ab, "failed to configure rxdma_mon_buf_ring %d\n",
-			    ret);
-		return ret;
-	}
-	ret = ath12k_dp_tx_htt_srng_setup(ab,
-					  dp->rxdma_mon_dst_ring.ring_id,
-					  mac_id, HAL_RXDMA_MONITOR_DST);
-	if (ret) {
-		ath12k_warn(ab, "failed to configure rxdma_mon_dst_ring %d\n",
-			    ret);
-		return ret;
-	}
-	ret = ath12k_dp_tx_htt_srng_setup(ab,
-					  dp->rxdma_mon_desc_ring.ring_id,
-					  mac_id, HAL_RXDMA_MONITOR_DESC);
-	if (ret) {
-		ath12k_warn(ab, "failed to configure rxdma_mon_dst_ring %d\n",
-			    ret);
-		return ret;
-	}
-#endif
-config_refill_ring:
-#if 0
-	for (i = 0; i < sc->hw_params.num_rxmda_per_pdev; i++) {
-		ret = qwz_dp_tx_htt_srng_setup(sc,
-		    dp->rx_mon_status_refill_ring[i].refill_buf_ring.ring_id,
-		    mac_id + i, HAL_RXDMA_MONITOR_STATUS);
-		if (ret) {
-			printf("%s: failed to configure "
-			    "mon_status_refill_ring%d %d\n",
-			    sc->sc_dev.dv_xname, i, ret);
-			return ret;
-		}
-	}
-#endif
 	return 0;
 }
 
@@ -14207,6 +14226,7 @@ void
 qwz_dp_process_rx_err_buf(struct qwz_softc *sc, uint32_t *ring_desc,
     int buf_id, int drop)
 {
+#if 0
 	struct qwz_pdev_dp *dp = &sc->pdev_dp;
 	struct dp_rxdma_ring *rx_ring = &dp->rx_refill_buf_ring;
 	struct mbuf *m;
@@ -14250,11 +14270,14 @@ qwz_dp_process_rx_err_buf(struct qwz_softc *sc, uint32_t *ring_desc,
 	}
 
 	m_freem(m);
+#endif
+	printf("%s:%d\n", __func__, __LINE__);
 }
 
 int
 qwz_dp_process_rx_err(struct qwz_softc *sc)
 {
+#if 0
 	struct ieee80211com *ic = &sc->sc_ic;
 	struct ifnet *ifp = &ic->ic_if;
 	uint32_t msdu_cookies[HAL_NUM_RX_MSDUS_PER_LINK_DESC];
@@ -14357,6 +14380,9 @@ qwz_dp_process_rx_err(struct qwz_softc *sc)
 	ifp->if_ierrors += tot_n_bufs_reaped;
 
 	return tot_n_bufs_reaped;
+#endif
+	printf("%s:%d\n", __func__, __LINE__);
+	return 0;
 }
 
 int
@@ -14503,6 +14529,7 @@ qwz_dp_rx_wbm_err(struct qwz_softc *sc, struct qwz_rx_msdu *msdu,
 int
 qwz_dp_rx_process_wbm_err(struct qwz_softc *sc)
 {
+#if 0
 	struct ieee80211com *ic = &sc->sc_ic;
 	struct ifnet *ifp = &ic->ic_if;
 	struct qwz_dp *dp = &sc->dp;
@@ -14602,6 +14629,9 @@ done:
 	ifp->if_ierrors += total_num_buffs_reaped;
 
 	return total_num_buffs_reaped;
+#endif
+	printf("%s:%d\n", __func__, __LINE__);
+	return 0;
 }
 
 struct qwz_rx_msdu *
@@ -15091,6 +15121,7 @@ qwz_dp_rx_process_received_packets(struct qwz_softc *sc,
 int
 qwz_dp_process_rx(struct qwz_softc *sc, int ring_id)
 {
+#if 0
 	struct qwz_dp *dp = &sc->dp;
 	struct qwz_pdev_dp *pdev_dp = &sc->pdev_dp;
 	struct dp_rxdma_ring *rx_ring;
@@ -15210,8 +15241,12 @@ try_again:
 	}
 exit:
 	return total_msdu_reaped;
+#endif
+	printf("%s:%d\n", __func__, __LINE__);
+	return 0;
 }
 
+#if 0
 struct mbuf *
 qwz_dp_rx_alloc_mon_status_buf(struct qwz_softc *sc,
     struct dp_rxdma_ring *rx_ring, int *buf_idx)
@@ -15265,11 +15300,13 @@ fail_free_mbuf:
 	m_freem(m);
 	return NULL;
 }
+#endif
 
 int
 qwz_dp_rx_reap_mon_status_ring(struct qwz_softc *sc, int mac_id,
     struct mbuf_list *ml)
 {
+#if 0
 	const struct ath12k_hw_hal_params *hal_params;
 	struct qwz_pdev_dp *dp;
 	struct dp_rxdma_ring *rx_ring;
@@ -15373,6 +15410,9 @@ move_next:
 	spin_unlock_bh(&srng->lock);
 #endif
 	return num_buffs_reaped;
+#endif
+	printf("%s:%d\n", __func__, __LINE__);
+	return 0;
 }
 
 enum hal_rx_mon_status
@@ -15507,6 +15547,7 @@ qwz_dp_service_mon_ring(void *arg)
 int
 qwz_dp_process_rxdma_err(struct qwz_softc *sc, int mac_id)
 {
+#if 0
 	struct ieee80211com *ic = &sc->sc_ic;
 	struct ifnet *ifp = &ic->ic_if;
 	struct dp_srng *err_ring;
@@ -15587,6 +15628,9 @@ qwz_dp_process_rxdma_err(struct qwz_softc *sc, int mac_id)
 	ifp->if_ierrors += num_buf_freed;
 
 	return num_buf_freed;
+#endif
+	printf("%s:%d\n", __func__, __LINE__);
+	return 0;
 }
 
 void
@@ -15889,7 +15933,7 @@ qwz_dp_process_reo_status(struct qwz_softc *sc)
 int
 qwz_dp_service_srng(struct qwz_softc *sc, int grp_id)
 {
-	struct qwz_pdev_dp *dp = &sc->pdev_dp;
+	struct qwz_dp *dp = &sc->dp;
 	int i, j, ret = 0;
 
 	if (sc->hw_params.ring_mask->tx[grp_id]) {
@@ -15929,9 +15973,10 @@ qwz_dp_service_srng(struct qwz_softc *sc, int grp_id)
 		ret = 1;
 
 	if (sc->hw_params.ring_mask->host2rxdma[grp_id]) {
-		qwz_dp_rxbufs_replenish(sc, 0 /* FIXME */,
-		    &dp->rx_refill_buf_ring, 0,
-		    sc->hw_params.hal_params->rx_buf_rbm);
+		TAILQ_HEAD(, ath12k_rx_desc_info) list;
+		TAILQ_INIT(&list);
+		qwz_dp_rxbufs_replenish(sc,
+		    &dp->rx_refill_buf_ring, &list, 0);
 	}
 
 	return ret;

@@ -1078,7 +1078,8 @@ struct qwz_hp_update_timer {
 
 struct ath12k_rx_desc_info {
 	TAILQ_ENTRY(ath12k_rx_desc_info) entry;
-//	struct sk_buff *skb;
+	struct mbuf	*m;
+	bus_dmamap_t	map;
 	uint32_t cookie;
 	uint32_t magic;
 	uint8_t in_use		: 1,
@@ -1191,6 +1192,27 @@ struct hal_wbm_idle_scatter_list {
 	struct hal_wbm_link_desc *vaddr;
 };
 
+struct dp_rxdma_mon_ring {
+	struct dp_srng refill_buf_ring;
+#if 0
+	struct idr bufs_idr;
+	/* Protects bufs_idr */
+	spinlock_t idr_lock;
+#else
+	struct qwz_rx_data *rx_data;
+#endif
+	int bufs_max;
+	uint8_t freemap[howmany(DP_RXDMA_BUF_RING_SIZE, 8)];
+};
+
+struct dp_rxdma_ring {
+	struct dp_srng refill_buf_ring;
+	struct qwz_rx_data *rx_data;
+	int bufs_max;
+};
+
+#define MAX_RXDMA_PER_PDEV     2
+
 struct qwz_dp {
 	struct qwz_softc *sc;
 	uint8_t num_bank_profiles;
@@ -1241,6 +1263,10 @@ struct qwz_dp {
 	/* protects the free and used desc lists */
 	spinlock_t tx_desc_lock[ATH12K_HW_MAX_QUEUES];
 #endif
+	struct dp_rxdma_ring rx_refill_buf_ring;
+	struct dp_srng rx_mac_buf_ring[MAX_RXDMA_PER_PDEV];
+	struct dp_srng rxdma_err_dst_ring[MAX_RXDMA_PER_PDEV];
+	struct dp_rxdma_mon_ring rxdma_mon_buf_ring;
 };
 
 #define ATH12K_SHADOW_DP_TIMER_INTERVAL 20
@@ -1540,19 +1566,6 @@ struct qwz_dbring_cap {
 	uint32_t min_buf_align;
 };
 
-struct dp_rxdma_ring {
-	struct dp_srng refill_buf_ring;
-#if 0
-	struct idr bufs_idr;
-	/* Protects bufs_idr */
-	spinlock_t idr_lock;
-#else
-	struct qwz_rx_data *rx_data;
-#endif
-	int bufs_max;
-	uint8_t freemap[howmany(DP_RXDMA_BUF_RING_SIZE, 8)];
-};
-
 enum hal_rx_mon_status {
 	HAL_RX_MON_STATUS_PPDU_NOT_DONE,
 	HAL_RX_MON_STATUS_PPDU_DONE,
@@ -1733,23 +1746,14 @@ struct qwz_mon_data {
 };
 
 
-#define MAX_RXDMA_PER_PDEV     2
-
 struct qwz_pdev_dp {
 	uint32_t mac_id;
-	uint32_t mon_dest_ring_stuck_cnt;
 #if 0
 	atomic_t num_tx_pending;
 	wait_queue_head_t tx_empty_waitq;
 #endif
-	struct dp_rxdma_ring rx_refill_buf_ring;
-	struct dp_srng rx_mac_buf_ring[MAX_RXDMA_PER_PDEV];
-	struct dp_srng rxdma_err_dst_ring[MAX_RXDMA_PER_PDEV];
 	struct dp_srng rxdma_mon_dst_ring[MAX_RXDMA_PER_PDEV];
 	struct dp_srng tx_mon_dst_ring[MAX_RXDMA_PER_PDEV];
-	struct dp_srng rxdma_mon_desc_ring;
-	struct dp_rxdma_ring rxdma_mon_buf_ring;
-	struct dp_rxdma_ring rx_mon_status_refill_ring[MAX_RXDMA_PER_PDEV];
 #if 0
 	struct ieee80211_rx_status rx_status;
 #endif

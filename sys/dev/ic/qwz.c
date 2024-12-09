@@ -7837,6 +7837,7 @@ qwz_dp_link_desc_setup(struct qwz_softc *sc,
 	uint64_t paddr;
 	uint32_t *desc;
 	int i, ret;
+	uint32_t cookie;
 	enum hal_rx_buf_return_buf_manager rbm = sc->dp.idle_link_rbm;
 
 	tot_mem_sz = n_link_desc * HAL_LINK_DESC_SIZE;
@@ -7891,8 +7892,10 @@ qwz_dp_link_desc_setup(struct qwz_softc *sc,
 		paddr = link_desc_banks[i].paddr;
 		while (n_entries &&
 		    (desc = qwz_hal_srng_src_get_next_entry(sc, srng))) {
+			cookie = DP_LINK_DESC_COOKIE_SET(n_entries, i);
 			qwz_hal_set_link_desc_addr(
-			    (struct hal_wbm_link_desc *) desc, i, paddr, rbm);
+			    (struct hal_wbm_link_desc *)desc, cookie, paddr,
+			    rbm);
 			n_entries--;
 			paddr += HAL_LINK_DESC_SIZE;
 		}

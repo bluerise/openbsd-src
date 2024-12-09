@@ -2077,8 +2077,10 @@ static const struct ath12k_hw_params ath12k_hw_params[] = {
 		.num_rxdma_dst_ring = 1,
 		.rx_mac_buf_ring = true,
 		.credit_flow = true,
-		.max_tx_ring = DP_TCL_NUM_RING_MAX,
+		.num_tcl_banks = 7,
+		.max_tx_ring = 3,
 		.htt_peer_map_v2 = false,
+		.reoq_lut_support = false,
 		.supports_shadow_regs = true,
 		.fix_l1ss = false,
 		.hal_params = &ath12k_hw_hal_params_wcn7850,
@@ -8634,7 +8636,7 @@ qwz_dp_cc_desc_init(struct qwz_softc *sc)
 void
 qwz_dp_cc_cleanup(struct qwz_softc *sc)
 {
-	// FIXME
+	printf("%s:%d\n", __func__, __LINE__);
 }
 
 int
@@ -8715,13 +8717,26 @@ free:
 int
 qwz_dp_init_bank_profiles(struct qwz_softc *sc)
 {
+	struct qwz_dp *dp = &sc->dp;
+
+	dp->num_bank_profiles = sc->hw_params.num_tcl_banks;
+	dp->bank_profiles = mallocarray(dp->num_bank_profiles,
+	    sizeof(struct ath12k_dp_tx_bank_profile), M_DEVBUF,
+	    M_NOWAIT | M_ZERO);
+	if (!dp->bank_profiles)
+		return ENOMEM;
+
 	return 0;
 }
 
 void
 qwz_dp_deinit_bank_profiles(struct qwz_softc *sc)
 {
-	// FIXME
+	struct qwz_dp *dp = &sc->dp;
+
+	free(dp->bank_profiles, M_DEVBUF, dp->num_bank_profiles *
+	    sizeof(struct ath12k_dp_tx_bank_profile));
+	dp->bank_profiles = NULL;
 }
 
 int qwz_dp_rxdma_ring_buf_setup(struct qwz_softc *, struct dp_rxdma_ring *, uint32_t);
@@ -8804,6 +8819,26 @@ qwz_dp_rx_free(struct qwz_softc *sc)
 	/* FIXME */
 }
 
+int
+qwz_dp_reoq_lut_setup(struct qwz_softc *sc)
+{
+	if (!sc->hw_params.reoq_lut_support)
+		return 0;
+
+	printf("%s:%d\n", __func__, __LINE__);
+	return EINVAL;
+}
+
+void
+qwz_dp_reoq_lut_cleanup(struct qwz_softc *sc)
+{
+	if (!sc->hw_params.reoq_lut_support)
+		return;
+
+	printf("%s:%d\n", __func__, __LINE__);
+	return;
+}
+
 enum hal_rx_buf_return_buf_manager
 qwz_dp_get_idle_link_rbm(struct qwz_softc *sc)
 {
@@ -8874,6 +8909,10 @@ qwz_dp_alloc(struct qwz_softc *sc)
 
 	size = sizeof(struct hal_wbm_release_ring) * DP_TX_COMP_RING_SIZE;
 
+	ret = qwz_dp_reoq_lut_setup(sc);
+	if (ret)
+		goto fail_cmn_srng_cleanup;
+
 	for (i = 0; i < sc->hw_params.max_tx_ring; i++) {
 #if 0
 		idr_init(&dp->tx_ring[i].txbuf_idr);
@@ -8881,7 +8920,7 @@ qwz_dp_alloc(struct qwz_softc *sc)
 #endif
 		ret = qwz_dp_tx_ring_alloc_tx_data(sc, &dp->tx_ring[i]);
 		if (ret)
-			goto fail_cmn_srng_cleanup;
+			goto fail_cmn_reoq_cleanup;
 
 		dp->tx_ring[i].cur = 0;
 		dp->tx_ring[i].queued = 0;
@@ -8892,7 +8931,7 @@ qwz_dp_alloc(struct qwz_softc *sc)
 		    M_NOWAIT | M_ZERO);
 		if (!dp->tx_ring[i].tx_status) {
 			ret = ENOMEM;
-			goto fail_cmn_srng_cleanup;
+			goto fail_cmn_reoq_cleanup;
 		}
 	}
 
@@ -8908,6 +8947,8 @@ qwz_dp_alloc(struct qwz_softc *sc)
 	return 0;
 fail_dp_rx_free:
 	qwz_dp_rx_free(sc);
+fail_cmn_reoq_cleanup:
+	qwz_dp_reoq_lut_cleanup(sc);
 fail_cmn_srng_cleanup:
 	qwz_dp_srng_common_cleanup(sc);
 fail_dp_bank_profiles_cleanup:
@@ -8972,7 +9013,10 @@ qwz_dp_free(struct qwz_softc *sc)
 	qwz_dp_link_desc_cleanup(sc, dp->link_desc_banks,
 	    HAL_WBM_IDLE_LINK, &dp->wbm_idle_ring);
 
+	qwz_dp_cc_cleanup(sc);
+	qwz_dp_reoq_lut_cleanup(sc);
 	qwz_dp_srng_common_cleanup(sc);
+	qwz_dp_deinit_bank_profiles(sc);
 	qwz_dp_reo_cmd_list_cleanup(sc);
 	for (i = 0; i < sc->hw_params.max_tx_ring; i++) {
 #if 0

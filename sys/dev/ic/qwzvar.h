@@ -220,6 +220,7 @@ struct ath12k_hw_params {
 	bool supports_monitor;
 	bool full_monitor_mode;
 #endif
+	bool reoq_lut_support;
 	bool supports_shadow_regs;
 	bool idle_ps;
 	bool supports_sta_ps;
@@ -229,7 +230,8 @@ struct ath12k_hw_params {
 	uint32_t hal_desc_sz;
 	bool fix_l1ss;
 	bool credit_flow;
-	uint8_t max_tx_ring;
+	uint32_t num_tcl_banks;
+	uint32_t max_tx_ring;
 	const struct ath12k_hw_hal_params *hal_params;
 	const struct hal_ops *hal_ops;
 	uint64_t qmi_cnss_feature_bitmap;
@@ -947,8 +949,7 @@ struct qwz_dp_htt_wbm_tx_status {
 
 #define DP_BA_WIN_SZ_MAX	256
 
-#define DP_TCL_NUM_RING_MAX	3
-#define DP_TCL_NUM_RING_MAX_QCA6390	1
+#define DP_TCL_NUM_RING_MAX	4
 
 #define DP_IDLE_SCATTER_BUFS_MAX 16
 
@@ -1192,6 +1193,8 @@ struct hal_wbm_idle_scatter_list {
 
 struct qwz_dp {
 	struct qwz_softc *sc;
+	uint8_t num_bank_profiles;
+	struct ath12k_dp_tx_bank_profile *bank_profiles;
 	enum ath12k_htc_ep_id eid;
 	int htt_tgt_version_received;
 	uint8_t htt_tgt_ver_major;

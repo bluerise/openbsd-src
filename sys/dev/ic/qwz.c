@@ -8815,6 +8815,23 @@ qwz_dp_rx_free(struct qwz_softc *sc)
 	/* FIXME */
 }
 
+enum hal_rx_buf_return_buf_manager
+qwz_dp_get_idle_link_rbm(struct qwz_softc *sc)
+{
+	switch (sc->device_id) {
+	case 0:
+		return HAL_RX_BUF_RBM_WBM_DEV0_IDLE_DESC_LIST;
+	case 1:
+		return HAL_RX_BUF_RBM_WBM_DEV1_IDLE_DESC_LIST;
+	case 2:
+		return HAL_RX_BUF_RBM_WBM_DEV2_IDLE_DESC_LIST;
+	default:
+		printf("%s: invalid %d device id, so choose default rbm\n",
+		    __func__, sc->device_id);
+		return HAL_RX_BUF_RBM_WBM_DEV0_IDLE_DESC_LIST;
+	}
+}
+
 int
 qwz_dp_alloc(struct qwz_softc *sc)
 {
@@ -8835,6 +8852,7 @@ qwz_dp_alloc(struct qwz_softc *sc)
 #endif
 
 	dp->reo_cmd_cache_flush_count = 0;
+	dp->idle_link_rbm = qwz_dp_get_idle_link_rbm(sc);
 
 	ret = qwz_wbm_idle_ring_setup(sc, &n_link_desc);
 	if (ret) {

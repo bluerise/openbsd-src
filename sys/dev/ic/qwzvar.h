@@ -1212,6 +1212,7 @@ struct qwz_dp {
 	struct list_head dp_full_mon_mpdu_list;
 #endif
 	uint32_t reo_cmd_cache_flush_count;
+	enum hal_rx_buf_return_buf_manager idle_link_rbm;
 #if 0
 	/**
 	 * protects access to below fields,
@@ -1951,6 +1952,7 @@ struct qwz_softc {
 	struct qwz_qmi_dev_mem_info	qmi_dev_mem[ATH12K_QMI_WLFW_MAX_DEV_MEM_NUM_V01];
 	struct ath12k_targ_cap		target_caps;
 	int				num_radios;
+	uint8_t				device_id;
 	uint32_t			cc_freq_hz;
 	uint32_t			cfg_tx_chainmask;
 	uint32_t			cfg_rx_chainmask;

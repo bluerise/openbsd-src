@@ -1928,9 +1928,6 @@ struct qwz_softc {
 	int install_key_done;
 	int install_key_status;
 
-	enum ath12k_11d_state	state_11d;
-	int			completed_11d_scan;
-	uint32_t		vdev_id_11d_scan;
 	struct {
 		int started;
 		int completed;

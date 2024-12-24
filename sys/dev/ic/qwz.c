@@ -229,7 +229,6 @@ qwz_init(struct ifnet *ifp)
 	ic->ic_state = IEEE80211_S_INIT;
 	sc->ns_nstate = IEEE80211_S_INIT;
 	sc->scan.state = ATH12K_SCAN_IDLE;
-	sc->vdev_id_11d_scan = QWZ_11D_INVALID_VDEV_ID;
 
 	error = qwz_core_init(sc);
 	if (error)
@@ -344,7 +343,6 @@ qwz_stop(struct ifnet *ifp)
 	sc->sc_newstate(ic, IEEE80211_S_INIT, -1);
 	sc->ns_nstate = IEEE80211_S_INIT;
 	sc->scan.state = ATH12K_SCAN_IDLE;
-	sc->vdev_id_11d_scan = QWZ_11D_INVALID_VDEV_ID;
 	sc->pdevs_active = 0;
 
 	/* power off hardware */
@@ -16061,45 +16059,6 @@ qwz_wmi_send_scan_chan_list_cmd(struct qwz_softc *sc, uint8_t pdev_id,
 	return 0;
 }
 
-int
-qwz_wmi_send_11d_scan_start_cmd(struct qwz_softc *sc,
-    struct wmi_11d_scan_start_params *param, uint8_t pdev_id)
-{
-	struct qwz_pdev_wmi *wmi = &sc->wmi.wmi[pdev_id];
-	struct wmi_11d_scan_start_cmd *cmd;
-	struct mbuf *m;
-	int ret;
-
-	m = qwz_wmi_alloc_mbuf(sizeof(*cmd));
-	if (!m)
-		return ENOMEM;
-
-	cmd = (struct wmi_11d_scan_start_cmd *)(mtod(m, uint8_t *) +
-	    sizeof(struct ath12k_htc_hdr) + sizeof(struct wmi_cmd_hdr));
-	cmd->tlv_header = FIELD_PREP(WMI_TLV_TAG, WMI_TAG_11D_SCAN_START_CMD) |
-	    FIELD_PREP(WMI_TLV_LEN, sizeof(*cmd) - TLV_HDR_SIZE);
-
-	cmd->vdev_id = param->vdev_id;
-	cmd->scan_period_msec = param->scan_period_msec;
-	cmd->start_interval_msec = param->start_interval_msec;
-
-	ret = qwz_wmi_cmd_send(wmi, m, WMI_11D_SCAN_START_CMDID);
-	if (ret) {
-		if (ret != ESHUTDOWN) {
-			printf("%s: failed to send WMI_11D_SCAN_START_CMDID: "
-			    "%d\n", sc->sc_dev.dv_xname, ret);
-		}
-		m_freem(m);
-		return ret;
-	}
-
-	DNPRINTF(QWZ_D_WMI, "%s: cmd 11d scan start vdev id %d period %d "
-	    "ms internal %d ms\n", __func__, cmd->vdev_id,
-	    cmd->scan_period_msec, cmd->start_interval_msec);
-
-	return 0;
-}
-
 static inline void
 qwz_wmi_copy_scan_event_cntrl_flags(struct wmi_start_scan_cmd *cmd,
     struct scan_req_params *param)
@@ -21034,8 +20993,6 @@ qwz_mac_op_add_interface(struct qwz_pdev *pdev)
 				    arvif->vdev_id, ret);
 			goto err_peer_del;
 		}
-
-		ath12k_mac_11d_scan_stop_all(ar->ab);
 		break;
 #endif
 	case WMI_VDEV_TYPE_STA:
@@ -21076,11 +21033,6 @@ qwz_mac_op_add_interface(struct qwz_pdev *pdev)
 			printf("%s: failed to disable vdev %d ps mode: %d\n",
 			    sc->sc_dev.dv_xname, arvif->vdev_id, ret);
 			goto err_peer_del;
-		}
-
-		if (isset(sc->wmi.svc_map, WMI_TLV_SERVICE_11D_OFFLOAD)) {
-			sc->completed_11d_scan = 0;
-			sc->state_11d = ATH12K_11D_PREPARING;
 		}
 		break;
 #if 0
@@ -21190,59 +21142,6 @@ qwz_init_task(void *arg)
 
 	rw_exit(&sc->ioctl_rwl);
 	splx(s);
-}
-
-void
-qwz_mac_11d_scan_start(struct qwz_softc *sc, struct qwz_vif *arvif)
-{
-	struct ieee80211com *ic = &sc->sc_ic;
-	struct wmi_11d_scan_start_params param;
-	int ret;
-#ifdef notyet
-	mutex_lock(&ar->ab->vdev_id_11d_lock);
-#endif
-	DNPRINTF(QWZ_D_MAC, "%s: vdev id for 11d scan %d\n", __func__,
-	    sc->vdev_id_11d_scan);
-#if 0
-	if (ar->regdom_set_by_user)
-		goto fin;
-#endif
-	if (sc->vdev_id_11d_scan != QWZ_11D_INVALID_VDEV_ID)
-		goto fin;
-
-	if (!isset(sc->wmi.svc_map, WMI_TLV_SERVICE_11D_OFFLOAD))
-		goto fin;
-
-	if (ic->ic_opmode != IEEE80211_M_STA)
-		goto fin;
-
-	param.vdev_id = arvif->vdev_id;
-	param.start_interval_msec = 0;
-	param.scan_period_msec = QWZ_SCAN_11D_INTERVAL;
-
-	DNPRINTF(QWZ_D_MAC, "%s: start 11d scan\n", __func__);
-
-	ret = qwz_wmi_send_11d_scan_start_cmd(sc, &param,
-	   0 /* TODO: derive pdev ID from arvif somehow? */);
-	if (ret) {
-		if (ret != ESHUTDOWN) {
-			printf("%s: failed to start 11d scan; vdev: %d "
-			    "ret: %d\n", sc->sc_dev.dv_xname,
-			    arvif->vdev_id, ret);
-		}
-	} else {
-		sc->vdev_id_11d_scan = arvif->vdev_id;
-		if (sc->state_11d == ATH12K_11D_PREPARING)
-			sc->state_11d = ATH12K_11D_RUNNING;
-	}
-fin:
-	if (sc->state_11d == ATH12K_11D_PREPARING) {
-		sc->state_11d = ATH12K_11D_IDLE;
-		sc->completed_11d_scan = 0;
-	}
-#ifdef notyet
-	mutex_unlock(&ar->ab->vdev_id_11d_lock);
-#endif
 }
 
 void
@@ -22609,10 +22508,7 @@ qwz_wmi_start_scan_init(struct qwz_softc *sc, struct scan_req_params *arg)
 {
 	/* setup commonly used values */
 	arg->scan_req_id = 1;
-	if (sc->state_11d == ATH12K_11D_PREPARING)
-		arg->scan_priority = WMI_SCAN_PRIORITY_MEDIUM;
-	else
-		arg->scan_priority = WMI_SCAN_PRIORITY_LOW;
+	arg->scan_priority = WMI_SCAN_PRIORITY_LOW;
 	arg->dwell_time_active = 50;
 	arg->dwell_time_active_2g = 0;
 	arg->dwell_time_passive = 150;
@@ -22820,14 +22716,6 @@ qwz_start_scan(struct qwz_softc *sc, struct scan_req_params *arg)
 	if (ret)
 		return ret;
 
-	if (isset(sc->wmi.svc_map, WMI_TLV_SERVICE_11D_OFFLOAD)) {
-		timeout = 5;
-#if 0
-		if (ar->supports_6ghz)
-			timeout += 5 * HZ;
-#endif
-	}
-
 	while (sc->scan.state == ATH12K_SCAN_STARTING) {
 		ret = tsleep_nsec(&sc->scan.state, 0, "qwzscan",
 		    SEC_TO_NSEC(timeout));
@@ -22869,16 +22757,6 @@ qwz_scan(struct qwz_softc *sc)
 	if (sc->num_radios > 1)
 		printf("%s: TODO: only scanning with first vdev\n", __func__);
 
-	/* Firmwares advertising the support of triggering 11D algorithm
-	 * on the scan results of a regular scan expects driver to send
-	 * WMI_11D_SCAN_START_CMDID before sending WMI_START_SCAN_CMDID.
-	 * With this feature, separate 11D scan can be avoided since
-	 * regdomain can be determined with the scan results of the
-	 * regular scan.
-	 */
-	if (sc->state_11d == ATH12K_11D_PREPARING &&
-	    isset(sc->wmi.svc_map, WMI_TLV_SERVICE_SUPPORT_11D_FOR_HOST_SCAN))
-		qwz_mac_11d_scan_start(sc, arvif);
 #ifdef notyet
 	mutex_lock(&ar->conf_mutex);
 
@@ -22995,8 +22873,6 @@ exit:
 #ifdef notyet
 	mutex_unlock(&ar->conf_mutex);
 #endif
-	if (sc->state_11d == ATH12K_11D_PREPARING)
-		qwz_mac_11d_scan_start(sc, arvif);
 
 	return ret;
 }

@@ -23323,9 +23323,10 @@ qwz_radiotap_attach(struct qwz_softc *sc)
 int
 qwz_attach(struct qwz_softc *sc)
 {
-	struct ieee80211com *ic = &sc->sc_ic;
-	struct ifnet *ifp = &ic->ic_if;
-	int error, i;
+//	struct ieee80211com *ic = &sc->sc_ic;
+//	struct ifnet *ifp = &ic->ic_if;
+//	int error, i;
+	int i;
 
 	task_set(&sc->init_task, qwz_init_task, sc);
 	task_set(&sc->newstate_task, qwz_newstate_task, sc);
@@ -23339,12 +23340,14 @@ qwz_attach(struct qwz_softc *sc)
 
 	TAILQ_INIT(&sc->vif_list);
 
+#if 0
 	error = qwz_init(ifp);
 	if (error)
 		return error;
 
 	/* Turn device off until interface comes up. */
 	qwz_core_deinit(sc);
+#endif
 
 	return 0;
 }

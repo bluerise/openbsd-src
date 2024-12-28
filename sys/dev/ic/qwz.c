@@ -22969,12 +22969,7 @@ qwz_recalculate_mgmt_rate(struct qwz_softc *sc, struct ieee80211_node *ni,
 	if (ret)
 		printf("%s: failed to set mgmt tx rate\n",
 		    sc->sc_dev.dv_xname);
-#if 0
-	/* For WCN6855, firmware will clear this param when vdev starts, hence
-	 * cache it here so that we can reconfigure it once vdev starts.
-	 */
-	ab->hw_rate_code = hw_rate_code;
-#endif
+
 	vdev_param = WMI_VDEV_PARAM_BEACON_RATE;
 	ret = qwz_wmi_vdev_set_param_cmd(sc, vdev_id, pdev_id, vdev_param,
 	    hw_rate_code);

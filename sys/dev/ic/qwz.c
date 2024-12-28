@@ -8514,9 +8514,6 @@ qwz_dp_rx_alloc(struct qwz_softc *sc)
 #if notyet
 	idr_init(&dp->rxdma_mon_buf_ring.bufs_idr);
 	spin_lock_init(&dp->rxdma_mon_buf_ring.idr_lock);
-
-	idr_init(&dp->tx_mon_buf_ring.bufs_idr);
-	spin_lock_init(&dp->tx_mon_buf_ring.idr_lock);
 #endif
 
 	ret = qwz_dp_srng_setup(sc, &dp->rx_refill_buf_ring.refill_buf_ring,
@@ -12645,16 +12642,6 @@ qwz_dp_rx_pdev_srng_alloc(struct qwz_softc *sc)
 			    sc->sc_dev.dv_xname, i);
 			return ret;
 		}
-
-		srng = &dp->tx_mon_dst_ring[i];
-		ret = qwz_dp_srng_setup(sc, srng, HAL_TX_MONITOR_DST, 0,
-		    dp->mac_id + i, DP_TX_MONITOR_DEST_RING_SIZE);
-		if (ret) {
-			printf("%s: failed to setup "
-			    "tx_mon_dst_ring %d\n",
-			    sc->sc_dev.dv_xname, i);
-			return ret;
-		}
 	}
 
 #if 0
@@ -15631,16 +15618,18 @@ qwz_dp_service_srng(struct qwz_softc *sc, int grp_id)
 			ret = 1;
 	}
 
-	for (i = 0; i < sc->num_radios; i++) {
-		for (j = 0; j < sc->hw_params.num_rxmda_per_pdev; j++) {
-			int id = i * sc->hw_params.num_rxmda_per_pdev + j;
+	if (sc->hw_params.ring_mask->rx_mon_dest[grp_id]) {
+		for (i = 0; i < sc->num_radios; i++) {
+			for (j = 0; j < sc->hw_params.num_rxmda_per_pdev; j++) {
+				int id = i * sc->hw_params.num_rxmda_per_pdev + j;
 
-			if ((sc->hw_params.ring_mask->rx_mon_dest[grp_id] &
-			   (1 << id)) == 0)
-				continue;
+				if ((sc->hw_params.ring_mask->rx_mon_dest[grp_id] &
+				   (1 << id)) == 0)
+					continue;
 
-			if (qwz_dp_rx_process_mon_rings(sc, id))
-				ret = 1;
+				if (qwz_dp_rx_process_mon_rings(sc, id))
+					ret = 1;
+			}
 		}
 	}
 

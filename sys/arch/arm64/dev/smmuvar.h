@@ -25,6 +25,7 @@ struct smmu_dmamem {
 struct smmu_softc;
 struct smmu_domain {
 	struct smmu_softc		*sd_sc;
+	uint32_t			 sd_enabled;
 	uint32_t			 sd_sid;
 	bus_dma_tag_t			 sd_dmat;
 
@@ -122,6 +123,7 @@ struct smmu_softc {
 	SIMPLEQ_HEAD(, smmu_domain) sc_domains;
 
 	int			 (*sc_domain_create)(struct smmu_domain *);
+	void			 (*sc_domain_enable)(struct smmu_domain *);
 	void			 (*sc_tlbi_va)(struct smmu_domain *, vaddr_t);
 	void			 (*sc_tlb_sync_context)(struct smmu_domain *);
 };

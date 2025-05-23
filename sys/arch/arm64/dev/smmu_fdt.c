@@ -129,11 +129,6 @@ smmu_v2_fdt_attach(struct smmu_fdt_softc *fsc, int node)
 	if (OF_getproplen(node, "dma-coherent") == 0)
 		sc->sc_coherent = 1;
 
-	if (sc->sc_is_qcom) {
-		printf(": disabled\n");
-		return ENXIO;
-	}
-
 	if (smmu_v2_attach(sc) != 0)
 		return ENXIO;
 

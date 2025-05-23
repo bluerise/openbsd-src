@@ -73,6 +73,7 @@ uint64_t smmu_cb_read_8(struct smmu_softc *, int, bus_size_t);
 void smmu_cb_write_8(struct smmu_softc *, int, bus_size_t, uint64_t);
 
 int smmu_v2_domain_create(struct smmu_domain *);
+void smmu_v2_domain_enable(struct smmu_domain *);
 void smmu_v2_tlbi_va(struct smmu_domain *, vaddr_t);
 void smmu_v2_tlb_sync_global(struct smmu_softc *);
 void smmu_v2_tlb_sync_context(struct smmu_domain *);
@@ -123,6 +124,7 @@ int smmu_v3_write_ack(struct smmu_softc *, bus_size_t, bus_size_t,
      uint32_t);
 
 int smmu_v3_domain_create(struct smmu_domain *);
+void smmu_v3_domain_enable(struct smmu_domain *);
 void smmu_v3_cfgi_all(struct smmu_softc *);
 void smmu_v3_cfgi_cd(struct smmu_domain *);
 void smmu_v3_cfgi_ste(struct smmu_domain *);
@@ -379,6 +381,7 @@ smmu_v2_attach(struct smmu_softc *sc)
 	smmu_gr0_write_4(sc, SMMU_SCR0, reg);
 
 	sc->sc_domain_create = smmu_v2_domain_create;
+	sc->sc_domain_enable = smmu_v2_domain_enable;
 	sc->sc_tlbi_va = smmu_v2_tlbi_va;
 	sc->sc_tlb_sync_context = smmu_v2_tlb_sync_context;
 	return 0;
@@ -817,6 +820,24 @@ smmu_v2_domain_create(struct smmu_domain *dom)
 		reg |= SMMU_CB_SCTLR_ASIDPNE;
 	smmu_cb_write_4(sc, dom->sd_cb_idx, SMMU_CB_SCTLR, reg);
 
+	snprintf(dom->sd_exname, sizeof(dom->sd_exname), "%s:%x",
+	    sc->sc_dev.dv_xname, dom->sd_sid);
+	dom->sd_iovamap = extent_create(dom->sd_exname, 0,
+	    (1LL << iovabits) - 1, M_DEVBUF, NULL, 0, EX_WAITOK |
+	    EX_NOCOALESCE);
+
+	return 0;
+}
+
+void
+smmu_v2_domain_enable(struct smmu_domain *dom)
+{
+	struct smmu_softc *sc = dom->sd_sc;
+	uint32_t reg;
+
+	if (dom->sd_enabled)
+		return;
+
 	/* Point stream to context block */
 	reg = SMMU_S2CR_TYPE_TRANS | dom->sd_cb_idx;
 	if (sc->sc_has_exids && sc->sc_smr)
@@ -832,13 +853,7 @@ smmu_v2_domain_create(struct smmu_domain *dom)
 		smmu_gr0_write_4(sc, SMMU_SMR(dom->sd_smr_idx), reg);
 	}
 
-	snprintf(dom->sd_exname, sizeof(dom->sd_exname), "%s:%x",
-	    sc->sc_dev.dv_xname, dom->sd_sid);
-	dom->sd_iovamap = extent_create(dom->sd_exname, 0,
-	    (1LL << iovabits) - 1, M_DEVBUF, NULL, 0, EX_WAITOK |
-	    EX_NOCOALESCE);
-
-	return 0;
+	dom->sd_enabled = 1;
 }
 
 void
@@ -1351,6 +1366,8 @@ smmu_dmamap_create(bus_dma_tag_t t, bus_size_t size, int nsegments,
 	u_long dva, len;
 	int error;
 
+	sc->sc_domain_enable(dom);
+
 	error = sc->sc_dmat->_dmamap_create(sc->sc_dmat, size,
 	    nsegments, maxsegsz, boundary, flags, &map);
 	if (error)
@@ -1784,6 +1801,7 @@ smmu_v3_attach(struct smmu_softc *sc)
 	printf("\n");
 
 	sc->sc_domain_create = smmu_v3_domain_create;
+	sc->sc_domain_enable = smmu_v3_domain_enable;
 	sc->sc_tlbi_va = smmu_v3_tlbi_va;
 	sc->sc_tlb_sync_context = smmu_v3_tlb_sync_context;
 	return 0;
@@ -2114,6 +2132,15 @@ smmu_v3_domain_create(struct smmu_domain *dom)
 
 	smmu_v3_tlbi_asid(dom);
 	return 0;
+}
+
+void
+smmu_v3_domain_enable(struct smmu_domain *dom)
+{
+	if (dom->sd_enabled)
+		return;
+
+	dom->sd_enabled = 1;
 }
 
 int

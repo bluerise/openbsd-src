@@ -282,6 +282,8 @@ smmu_attach(struct smmu_softc *sc)
 			    SMMU_SMR_ID_MASK;
 			sc->sc_smr[i]->ss_mask = (reg >> SMMU_SMR_MASK_SHIFT) &
 			    SMMU_SMR_MASK_MASK;
+			printf("%s: SMR[%u] = 0x%x/0x%x\n", sc->sc_dev.dv_xname,
+			    i, sc->sc_smr[i]->ss_id, sc->sc_smr[i]->ss_mask);
 			if (sc->sc_bypass_quirk) {
 				smmu_gr0_write_4(sc, SMMU_S2CR(i),
 				    SMMU_S2CR_TYPE_TRANS |
@@ -561,6 +563,7 @@ smmu_domain_lookup(struct smmu_softc *sc, uint32_t sid)
 			return dom;
 	}
 
+	printf("%s: establishing sid 0x%x\n", sc->sc_dev.dv_xname, sid);
 	return smmu_domain_create(sc, sid);
 }
 
@@ -614,8 +617,12 @@ smmu_domain_create(struct smmu_softc *sc, uint32_t sid)
 			/* Take over QCOM SMRs */
 			if (sc->sc_is_qcom && sc->sc_smr[i] != NULL &&
 			    sc->sc_smr[i]->ss_dom == NULL &&
-			    sc->sc_smr[i]->ss_id == sid &&
-			    sc->sc_smr[i]->ss_mask == 0) {
+			    !((sc->sc_smr[i]->ss_id ^ sid) &
+			    ~sc->sc_smr[i]->ss_mask)) {
+				printf("%s: took over %u/%x/%x for sid %x\n",
+				    sc->sc_dev.dv_xname, i,
+				    sc->sc_smr[i]->ss_id,
+				    sc->sc_smr[i]->ss_mask, sid);
 				free(sc->sc_smr[i], M_DEVBUF,
 				    sizeof(struct smmu_smr));
 				sc->sc_smr[i] = NULL;
@@ -771,20 +778,6 @@ smmu_domain_create(struct smmu_softc *sc, uint32_t sid)
 		reg |= SMMU_CB_SCTLR_ASIDPNE;
 	smmu_cb_write_4(sc, dom->sd_cb_idx, SMMU_CB_SCTLR, reg);
 
-	/* Point stream to context block */
-	reg = SMMU_S2CR_TYPE_TRANS | dom->sd_cb_idx;
-	if (sc->sc_has_exids && sc->sc_smr)
-		reg |= SMMU_S2CR_EXIDVALID;
-	smmu_gr0_write_4(sc, SMMU_S2CR(dom->sd_smr_idx), reg);
-
-	/* Map stream idx to S2CR idx */
-	if (sc->sc_smr) {
-		reg = sid;
-		if (!sc->sc_has_exids)
-			reg |= SMMU_SMR_VALID;
-		smmu_gr0_write_4(sc, SMMU_SMR(dom->sd_smr_idx), reg);
-	}
-
 	snprintf(dom->sd_exname, sizeof(dom->sd_exname), "%s:%x",
 	    sc->sc_dev.dv_xname, sid);
 	dom->sd_iovamap = extent_create(dom->sd_exname, 0,
@@ -796,6 +789,32 @@ smmu_domain_create(struct smmu_softc *sc, uint32_t sid)
 
 	SIMPLEQ_INSERT_TAIL(&sc->sc_domains, dom, sd_list);
 	return dom;
+}
+
+static void
+smmu_domain_enable(struct smmu_domain *dom)
+{
+	struct smmu_softc *sc = dom->sd_sc;
+	uint32_t reg;
+
+	if (dom->sd_enabled)
+		return;
+
+	/* Point stream to context block */
+	reg = SMMU_S2CR_TYPE_TRANS | dom->sd_cb_idx;
+	if (sc->sc_has_exids && sc->sc_smr)
+		reg |= SMMU_S2CR_EXIDVALID;
+	smmu_gr0_write_4(sc, SMMU_S2CR(dom->sd_smr_idx), reg);
+
+	/* Map stream idx to S2CR idx */
+	if (sc->sc_smr) {
+		reg = dom->sd_sid;
+		if (!sc->sc_has_exids)
+			reg |= SMMU_SMR_VALID;
+		smmu_gr0_write_4(sc, SMMU_SMR(dom->sd_smr_idx), reg);
+	}
+
+	dom->sd_enabled = 1;
 }
 
 void
@@ -1298,6 +1317,8 @@ smmu_dmamap_create(bus_dma_tag_t t, bus_size_t size, int nsegments,
 	bus_dmamap_t map;
 	u_long dva, len;
 	int error;
+
+	smmu_domain_enable(dom);
 
 	error = sc->sc_dmat->_dmamap_create(sc->sc_dmat, size,
 	    nsegments, maxsegsz, boundary, flags, &map);

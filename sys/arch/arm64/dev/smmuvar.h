@@ -18,6 +18,7 @@
 struct smmu_softc;
 struct smmu_domain {
 	struct smmu_softc		*sd_sc;
+	uint32_t			 sd_enabled;
 	uint32_t			 sd_sid;
 	bus_dma_tag_t			 sd_dmat;
 	int				 sd_cb_idx;

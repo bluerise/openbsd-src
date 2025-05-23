@@ -89,11 +89,6 @@ smmu_fdt_attach(struct device *parent, struct device *self, void *aux)
 	if (OF_getproplen(faa->fa_node, "dma-coherent") == 0)
 		sc->sc_coherent = 1;
 
-	if (sc->sc_is_qcom) {
-		printf(": disabled\n");
-		return;
-	}
-
 	if (smmu_attach(sc) != 0)
 		return;
 

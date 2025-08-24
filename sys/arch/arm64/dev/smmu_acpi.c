@@ -66,7 +66,8 @@ smmu_acpi_match(struct device *parent, void *match, void *aux)
 	struct acpiiort_attach_args *aia = aux;
 	struct acpi_iort_node *node = aia->aia_node;
 
-	if (node->type != ACPI_IORT_SMMU)
+	if (node->type != ACPI_IORT_SMMU &&
+	    node->type != ACPI_IORT_SMMU_V3)
 		return 0;
 
 	return 1;

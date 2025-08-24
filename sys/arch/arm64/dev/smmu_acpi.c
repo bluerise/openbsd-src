@@ -83,7 +83,9 @@ smmu_acpi_attach(struct device *parent, struct device *self, void *aux)
 	struct acpiiort_smmu *as;
 	int ret = ENXIO;
 
-	sc->sc_dmat = aia->aia_dmat;
+	sc->sc_dmat = malloc(sizeof(*aia->aia_dmat), M_DEVBUF,
+	    M_WAITOK | M_ZERO);
+	memcpy(sc->sc_dmat, aia->aia_dmat, sizeof(*aia->aia_dmat));
 	sc->sc_iot = aia->aia_memt;
 
 	if (node->type == ACPI_IORT_SMMU)
@@ -138,7 +140,7 @@ smmu_v2_acpi_attach(struct smmu_acpi_softc *asc, struct acpi_iort_node *node)
 	}
 
 	if (smmu->flags & ACPI_IORT_SMMU_COHERENT)
-		sc->sc_coherent = 1;
+		sc->sc_dmat->_flags |= BUS_DMA_COHERENT;
 
 	/* Check for QCOM devices to enable quirk. */
 	aml_find_node(acpi_softc->sc_root, "_HID", smmu_acpi_foundqcom, sc);

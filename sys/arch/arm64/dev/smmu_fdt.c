@@ -87,7 +87,9 @@ smmu_fdt_attach(struct device *parent, struct device *self, void *aux)
 		return;
 	}
 
-	sc->sc_dmat = faa->fa_dmat;
+	sc->sc_dmat = malloc(sizeof(*faa->fa_dmat), M_DEVBUF,
+	    M_WAITOK | M_ZERO);
+	memcpy(sc->sc_dmat, faa->fa_dmat, sizeof(*faa->fa_dmat));
 	sc->sc_iot = faa->fa_iot;
 	if (bus_space_map(sc->sc_iot, faa->fa_reg[0].addr,
 	    faa->fa_reg[0].size, 0, &sc->sc_ioh)) {
@@ -126,8 +128,6 @@ smmu_v2_fdt_attach(struct smmu_fdt_softc *fsc, int node)
 	if (OF_is_compatible(node, "qcom,sc8280xp-smmu-500") ||
 	    OF_is_compatible(node, "qcom,x1e80100-smmu-500"))
 		sc->sc_is_qcom = 1;
-	if (OF_getproplen(node, "dma-coherent") == 0)
-		sc->sc_coherent = 1;
 
 	if (sc->sc_is_qcom) {
 		printf(": disabled\n");
@@ -162,9 +162,6 @@ smmu_v3_fdt_attach(struct smmu_fdt_softc *fsc, int node)
 {
 	struct smmu_softc *sc = &fsc->sc_smmu;
 	int idx;
-
-	if (OF_getproplen(node, "dma-coherent") == 0)
-		sc->sc_coherent = 1;
 
 	if (smmu_v3_attach(sc) != 0)
 		return ENXIO;

@@ -147,6 +147,9 @@ smmu_attach(struct smmu_softc *sc)
 	    "smmu_vp3", NULL);
 	pool_setlowat(&sc->sc_vp3_pool, 20);
 
+	if (sc->sc_dmat->_flags & BUS_DMA_COHERENT)
+		sc->sc_coherent = 1;
+
 	return 0;
 }
 
@@ -575,7 +578,8 @@ smmu_device_map(void *cookie, uint32_t sid, bus_dma_tag_t dmat)
 		dom->sd_dmat->_dmamap_load_uio = smmu_dmamap_load_uio;
 		dom->sd_dmat->_dmamap_load_raw = smmu_dmamap_load_raw;
 		dom->sd_dmat->_dmamap_unload = smmu_dmamap_unload;
-		dom->sd_dmat->_flags |= BUS_DMA_COHERENT;
+		if (sc->sc_coherent)
+			dom->sd_dmat->_flags |= BUS_DMA_COHERENT;
 	}
 
 	return dom->sd_dmat;
@@ -772,12 +776,8 @@ smmu_v2_domain_create(struct smmu_domain *dom)
 			break;
 		}
 	}
-	if (sc->sc_coherent)
-		reg |= SMMU_CB_TCR_IRGN0_WBWA | SMMU_CB_TCR_ORGN0_WBWA |
-		    SMMU_CB_TCR_SH0_ISH;
-	else
-		reg |= SMMU_CB_TCR_IRGN0_NC | SMMU_CB_TCR_ORGN0_NC |
-		    SMMU_CB_TCR_SH0_OSH;
+	reg |= SMMU_CB_TCR_IRGN0_WBWA | SMMU_CB_TCR_ORGN0_WBWA |
+	    SMMU_CB_TCR_SH0_ISH;
 	smmu_cb_write_4(sc, dom->sd_cb_idx, SMMU_CB_TCR, reg);
 
 	if (dom->sd_4level) {

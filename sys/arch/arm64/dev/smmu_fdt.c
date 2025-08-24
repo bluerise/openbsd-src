@@ -69,8 +69,9 @@ smmu_fdt_match(struct device *parent, void *match, void *aux)
 {
 	struct fdt_attach_args *faa = aux;
 
-	return (OF_is_compatible(faa->fa_node, "arm,smmu-v2") ||
-	    OF_is_compatible(faa->fa_node, "arm,mmu-500"));
+	return (OF_is_compatible(faa->fa_node, "arm,mmu-500") ||
+	    OF_is_compatible(faa->fa_node, "arm,smmu-v2") ||
+	    OF_is_compatible(faa->fa_node, "arm,smmu-v3"));
 }
 
 void

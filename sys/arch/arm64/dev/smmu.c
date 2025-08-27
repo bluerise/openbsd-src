@@ -575,7 +575,6 @@ smmu_device_map(void *cookie, uint32_t sid, bus_dma_tag_t dmat)
 		dom->sd_dmat->_dmamap_load_uio = smmu_dmamap_load_uio;
 		dom->sd_dmat->_dmamap_load_raw = smmu_dmamap_load_raw;
 		dom->sd_dmat->_dmamap_unload = smmu_dmamap_unload;
-		dom->sd_dmat->_flags |= BUS_DMA_COHERENT;
 	}
 
 	return dom->sd_dmat;

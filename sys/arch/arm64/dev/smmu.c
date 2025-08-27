@@ -743,7 +743,9 @@ smmu_v2_domain_create(struct smmu_domain *dom)
 	if (iovabits >= 40)
 		dom->sd_4level = 1;
 
-	reg = SMMU_CB_TCR_TG0_4KB | SMMU_CB_TCR_T0SZ(64 - iovabits);
+	reg = SMMU_CB_TCR_TG0_4KB | SMMU_CB_TCR_T0SZ(64 - iovabits) |
+	    SMMU_CB_TCR_IRGN0_WBWA | SMMU_CB_TCR_ORGN0_WBWA |
+	    SMMU_CB_TCR_SH0_ISH;
 	if (dom->sd_stage == 1) {
 		reg |= SMMU_CB_TCR_EPD1;
 	} else {
@@ -772,12 +774,6 @@ smmu_v2_domain_create(struct smmu_domain *dom)
 			break;
 		}
 	}
-	if (sc->sc_coherent)
-		reg |= SMMU_CB_TCR_IRGN0_WBWA | SMMU_CB_TCR_ORGN0_WBWA |
-		    SMMU_CB_TCR_SH0_ISH;
-	else
-		reg |= SMMU_CB_TCR_IRGN0_NC | SMMU_CB_TCR_ORGN0_NC |
-		    SMMU_CB_TCR_SH0_OSH;
 	smmu_cb_write_4(sc, dom->sd_cb_idx, SMMU_CB_TCR, reg);
 
 	if (dom->sd_4level) {

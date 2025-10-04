@@ -222,6 +222,15 @@ smmu_v3_acpi_attach(struct smmu_acpi_softc *asc, struct acpi_iort_node *node)
 	if (ACPI_IORT_SMMU_V3_COHACC_OVERRIDE(smmu->flags))
 		sc->sc_coherent = 1;
 
+	/* Check for QCOM devices to enable quirk. */
+	aml_find_node(acpi_softc->sc_root, "_HID", smmu_acpi_foundqcom, sc);
+
+	/* FIXME: Don't configure on QCOM until its runtime use is fixed. */
+	if (sc->sc_is_qcom) {
+		printf(": disabled\n");
+		return ENXIO;
+	}
+
 	if (smmu_v3_attach(sc) != 0)
 		return ENXIO;
 

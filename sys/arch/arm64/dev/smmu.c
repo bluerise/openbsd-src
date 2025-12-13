@@ -1993,7 +1993,7 @@ smmu_v3_domain_create(struct smmu_domain *dom)
 	vaddr_t l0va;
 	uint32_t iovabits;
 
-	if (dom->sd_sid >= (1 << sc->v3.sc_sidsize))
+	if (dom->sd_sid >= (1ULL << sc->v3.sc_sidsize))
 		return EINVAL;
 
 	if (dom->sd_stage != 1)

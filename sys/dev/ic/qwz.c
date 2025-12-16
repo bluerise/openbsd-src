@@ -5133,10 +5133,10 @@ qwz_qrtr_say_hello(struct qwz_softc *sc)
 	memset(&hdr, 0, sizeof(hdr));
 	hdr.version = htole32(QRTR_PROTO_VER_1);
 	hdr.type = htole32(QRTR_TYPE_HELLO);
-	hdr.src_node_id = htole32(0x01); /* TODO make human-readable */
-	hdr.src_port_id = htole32(0xfffffffeU); /* TODO make human-readable */
-	hdr.dst_node_id = htole32(0x07); /* TODO make human-readable */
-	hdr.dst_port_id = htole32(0xfffffffeU); /* TODO make human-readable */
+	hdr.src_node_id = htole32(QRTR_NODE_HOST);
+	hdr.src_port_id = htole32(QRTR_PORT_CTRL);
+	hdr.dst_node_id = htole32(QRTR_NODE_FW);
+	hdr.dst_port_id = htole32(QRTR_PORT_CTRL);
 	hdr.size = htole32(sizeof(pkt));
 
 	err = m_copyback(m, 0, sizeof(hdr), &hdr, M_NOWAIT);
@@ -5197,10 +5197,10 @@ qwz_qrtr_resume_tx(struct qwz_softc *sc)
 	memset(&hdr, 0, sizeof(hdr));
 	hdr.version = htole32(QRTR_PROTO_VER_1);
 	hdr.type = htole32(QRTR_TYPE_RESUME_TX);
-	hdr.src_node_id = htole32(0x01); /* TODO make human-readable */
-	hdr.src_port_id = htole32(0x4000); /* TODO make human-readable */
-	hdr.dst_node_id = htole32(0x07); /* TODO make human-readable */
-	hdr.dst_port_id = htole32(0x01); /* TODO make human-readable */
+	hdr.src_node_id = htole32(QRTR_NODE_HOST);
+	hdr.src_port_id = htole32(QRTR_PORT_QMI);
+	hdr.dst_node_id = htole32(QRTR_NODE_FW);
+	hdr.dst_port_id = htole32(0x01); /* Firmware QMI port (from NEW_SERVER response) */
 	hdr.size = htole32(sizeof(pkt));
 
 	err = m_copyback(m, 0, sizeof(hdr), &hdr, M_NOWAIT);
@@ -5209,8 +5209,8 @@ qwz_qrtr_resume_tx(struct qwz_softc *sc)
 
 	memset(&pkt, 0, sizeof(pkt));
 	pkt.cmd = htole32(QRTR_TYPE_RESUME_TX);
-	pkt.client.node = htole32(0x01);
-	pkt.client.port = htole32(0x4000);
+	pkt.client.node = htole32(QRTR_NODE_HOST);
+	pkt.client.port = htole32(QRTR_PORT_QMI);
 
 	err = m_copyback(m, sizeof(hdr), sizeof(pkt), &pkt, M_NOWAIT);
 	if (err)
@@ -5766,10 +5766,10 @@ qwz_qmi_send_request(struct qwz_softc *sc, uint16_t msg_id, size_t msg_len,
 	memset(&hdr, 0, sizeof(hdr));
 	hdr.version = htole32(QRTR_PROTO_VER_1);
 	hdr.type = htole32(QRTR_TYPE_DATA);
-	hdr.src_node_id = htole32(0x01); /* TODO make human-readable */
-	hdr.src_port_id = htole32(0x4000); /* TODO make human-readable */
-	hdr.dst_node_id = htole32(0x07); /* TODO make human-readable */
-	hdr.dst_port_id = htole32(0x01); /* TODO make human-readable */
+	hdr.src_node_id = htole32(QRTR_NODE_HOST);
+	hdr.src_port_id = htole32(QRTR_PORT_QMI);
+	hdr.dst_node_id = htole32(QRTR_NODE_FW);
+	hdr.dst_port_id = htole32(0x01); /* Firmware QMI port (from NEW_SERVER response) */
 	hdr.size = htole32(encoded_len);
 
 	err = m_copyback(m, 0, sizeof(hdr), &hdr, M_NOWAIT);

@@ -6490,6 +6490,11 @@ struct qrtr_ctrl_pkt {
 #define QRTR_NODE_BCAST		0xffffffffU
 #define QRTR_PORT_CTRL		0xfffffffeU
 
+/* Common QRTR node and port IDs used for QMI communication */
+#define QRTR_NODE_HOST		0x01		/* Host/AP node ID */
+#define QRTR_NODE_FW		0x07		/* Firmware/modem node ID */
+#define QRTR_PORT_QMI		0x4000		/* QMI service port */
+
 /*
  * qmi.h
  */

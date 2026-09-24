@@ -1086,6 +1086,10 @@ int	vm_rwregs(struct vm *, struct vm_rwregs_params *, int);
 int	vcpu_reset_regs(struct vcpu *, struct vcpu_reg_state *);
 int	svm_get_vmsa_pa(struct proc *, struct file *, uint32_t, uint64_t *);
 
+#ifdef MULTIPROCESSOR
+#define vmm_nudge_cpu(ci) x86_send_ipi((ci), X86_IPI_NOP)
+#endif
+
 #endif /* _KERNEL */
 
 #endif	/* ! _LOCORE */

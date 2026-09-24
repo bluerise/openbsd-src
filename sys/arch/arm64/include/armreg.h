@@ -214,6 +214,8 @@
 #define	 EXCP_BRANCH_TGT	0x0d	/* Branch target exception */
 #define	 EXCP_ILL_STATE		0x0e	/* Illegal execution state */
 #define	 EXCP_SVC		0x15	/* SVC trap */
+#define	 EXCP_HVC		0x16	/* HVC trap */
+#define	 EXCP_SMC		0x17	/* SMC trap */
 #define	 EXCP_MSR		0x18	/* MSR/MRS trap */
 #define	 EXCP_SVE		0x19	/* SVE trap */
 #define	 EXCP_FPAC		0x1c	/* Faulting PAC trap */

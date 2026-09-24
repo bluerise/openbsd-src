@@ -650,7 +650,7 @@ vm_request_stop(struct vm *vm)
 		if (old != VCPU_STATE_TERMINATED) {
 			ci = READ_ONCE(vcpu->vc_curcpu);
 			if (ci != NULL)
-				x86_send_ipi(ci, X86_IPI_NOP);
+				vmm_nudge_cpu(ci);
 		}
 #endif
 	}

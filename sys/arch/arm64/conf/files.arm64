@@ -92,6 +92,15 @@ device  cpu {}
 attach  cpu at mainbus
 
 #
+# VMM
+#
+device vmm {}
+attach vmm at mainbus
+file	dev/vmm/vmm.c				vmm		needs-flag
+file	arch/arm64/arm64/vmm_machdep.c		vmm		needs-flag
+file	arch/arm64/arm64/vmm_support.S		vmm
+
+#
 # Machine-independent HID support
 #
 include	"dev/hid/files.hid"

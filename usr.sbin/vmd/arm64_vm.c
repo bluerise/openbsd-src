@@ -16,6 +16,7 @@
  */
 #include <sys/types.h>
 
+#include "lapic.h"
 #include "vmd.h"
 #include "vmm.h"
 
@@ -205,3 +206,16 @@ void
 psp_setup(void)
 {
 }
+
+uint64_t
+lapic_targets(uint8_t dest, int dest_mode)
+{
+	return (0);
+}
+
+int
+lapic_lowest_priority(uint64_t targets, uint32_t arb_id)
+{
+	return (-1);
+}
+

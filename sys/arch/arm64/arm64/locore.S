@@ -53,9 +53,15 @@ drop_to_el1:
 	ret
 2:
 	/*
-	 * Check for EL2 Host mode by testing aliasing between
-	 * EL1 and EL2 accessors of the FAR_EL2 register.
+	 * Check for EL2 Host mode:
+	 * 1. Check if ARMv8.1-A VHE is supported via ID_AA64MMFR1_EL1.VH.
+	 * 2. Also check aliasing between FAR_EL1 and FAR_EL2 for CPUs
+	 *    where HCR_EL2.E2H is RES1 (e.g. Apple Silicon).
 	 */
+	mrs	x2, id_aa64mmfr1_el1
+	ubfx	x2, x2, #ID_AA64MMFR1_VH_SHIFT, #4
+	cbnz	x2, 5f
+
 	msr	hcr_el2, xzr
 	isb
 	mov	x2, #1
@@ -68,10 +74,32 @@ drop_to_el1:
 	cmp	x2, #2
 	b.ne	3f
 
+5:
 	mov	x2, #HCR_E2H
 	orr	x2, x2, #HCR_TGE
+	orr	x2, x2, #(HCR_API | HCR_APK)
 	msr	hcr_el2, x2
 	isb
+
+	/* Enable access to physical timers and counters */
+	mov	x2, #(CNTHCTL_EL1PCTEN | CNTHCTL_EL1PCEN)
+	msr	cnthctl_el2, x2
+
+	/* Set the counter offset to a known value */
+	msr	cntvoff_el2, xzr
+
+	/* Configure GICv3 CPU interface */
+	mrs	x2, id_aa64pfr0_el1
+	ubfx	x2, x2, #ID_AA64PFR0_GIC_SHIFT, #ID_AA64PFR0_GIC_BITS
+	cmp	x2, #(ID_AA64PFR0_GIC_CPUIF_EN >> ID_AA64PFR0_GIC_SHIFT)
+	b.ne	1b
+
+	mrs	x2, icc_sre_el2
+	orr	x2, x2, #ICC_SRE_EL2_EN	/* Enable access from insecure EL1 */
+	orr	x2, x2, #ICC_SRE_EL2_SRE	/* Enable system registers */
+	msr	icc_sre_el2, x2
+	isb
+
 	b	1b
 3:
 	/* Configure the Hypervisor */

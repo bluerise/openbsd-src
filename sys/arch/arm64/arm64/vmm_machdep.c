@@ -73,10 +73,22 @@ void
 vmm_attach_machdep(struct device *parent, struct device *self, void *aux)
 {
 	struct vmm_softc *sc = (struct vmm_softc *)self;
+	uint64_t pfr0, vtr;
 
 	sc->sc_md.has_vhe = vmm_has_vhe();
 	sc->mode = VMM_MODE_ARM64;
-	printf(": ARM64 (VHE)");
+
+	pfr0 = READ_SPECIALREG(id_aa64pfr0_el1);
+	if (ID_AA64PFR0_GIC(pfr0) != ID_AA64PFR0_GIC_CPUIF_NONE) {
+		sc->sc_md.has_gicv3 = 1;
+		vtr = READ_SPECIALREG(ich_vtr_el2);
+		sc->sc_md.nr_lrs = ((vtr & ICH_VTR_LIST_MASK) >>
+		    ICH_VTR_LIST_SHIFT) + 1;
+		if (sc->sc_md.nr_lrs > VMM_ARM64_MAX_LRS)
+			sc->sc_md.nr_lrs = VMM_ARM64_MAX_LRS;
+	}
+
+	printf(": ARM64 (VHE%s)", sc->sc_md.has_gicv3 ? ", GICv3" : "");
 }
 
 void
@@ -120,7 +132,8 @@ vcpu_init(struct vcpu *vcpu, struct vm_create_params *vcp)
 	rw_init(&vcpu->vc_lock, "vcpu");
 
 	/* Initial HCR_EL2 configuration for 64-bit guest execution */
-	vcpu->vc_hcr_el2 = HCR_RW | HCR_VM | HCR_AMO | HCR_IMO | HCR_FMO;
+	vcpu->vc_hcr_el2 = HCR_RW | HCR_VM | HCR_AMO | HCR_IMO | HCR_FMO |
+	    HCR_TWI;
 
 	/* Setup VTCR_EL2 and VTTBR_EL2 for Stage 2 translation */
 	mmfr0 = READ_SPECIALREG(id_aa64mmfr0_el1);
@@ -135,6 +148,19 @@ vcpu_init(struct vcpu *vcpu, struct vm_create_params *vcp)
 
 	vcpu->vc_vttbr_el2 = VTTBR_VMID(vcpu->vc_vpid) |
 	    (vcpu->vc_parent->vm_pmap->pm_pt0pa & VTTBR_BADDR_MASK);
+
+	/* Initialize Virtual Timer */
+	vcpu->vc_cntvoff_el2 = 0;
+	vcpu->vc_cntv_ctl_el0 = 0;
+	vcpu->vc_cntv_cval_el0 = 0;
+
+	/* Initialize GICv3 virtual CPU interface */
+	if (vmm_softc->sc_md.has_gicv3) {
+		vcpu->vc_gic.vg_hcr = ICH_HCR_EN;
+		vcpu->vc_gic.vg_vmcr = ICH_VMCR_VENG1 |
+		    (0xffULL << ICH_VMCR_VPMR_SHIFT);
+		vcpu->vc_gic.vg_nr_lrs = vmm_softc->sc_md.nr_lrs;
+	}
 
 	return (0);
 }
@@ -165,6 +191,17 @@ vcpu_reset_regs(struct vcpu *vcpu, struct vcpu_reg_state *vrs)
 	vcpu->vc_intr = 0;
 	atomic_swap_uint(&vcpu->vc_intr_latch, 0);
 	vcpu->vc_irqready = 0;
+
+	/* Reset virtual timer and GIC state */
+	vcpu->vc_cntv_ctl_el0 = 0;
+	vcpu->vc_cntv_cval_el0 = 0;
+	if (vmm_softc->sc_md.has_gicv3) {
+		memset(vcpu->vc_gic.vg_lr, 0, sizeof(vcpu->vc_gic.vg_lr));
+		memset(vcpu->vc_gic.vg_ap0r, 0, sizeof(vcpu->vc_gic.vg_ap0r));
+		memset(vcpu->vc_gic.vg_ap1r, 0, sizeof(vcpu->vc_gic.vg_ap1r));
+		vcpu->vc_gic.vg_vmcr = ICH_VMCR_VENG1 |
+		    (0xffULL << ICH_VMCR_VPMR_SHIFT);
+	}
 
 	return (0);
 }
@@ -291,6 +328,154 @@ vmm_restore_guest_sysregs(struct vcpu *vcpu)
 	__asm volatile("isb" ::: "memory");
 }
 
+static void
+vmm_restore_guest_timer(struct vcpu *vcpu)
+{
+	WRITE_SPECIALREG(cntvoff_el2, vcpu->vc_cntvoff_el2);
+	WRITE_SPECIALREG(cntv_cval_el0, vcpu->vc_cntv_cval_el0);
+	WRITE_SPECIALREG(cntv_ctl_el0, vcpu->vc_cntv_ctl_el0);
+	__asm volatile("isb" ::: "memory");
+}
+
+static void
+vmm_save_guest_timer(struct vcpu *vcpu)
+{
+	vcpu->vc_cntv_ctl_el0 = READ_SPECIALREG(cntv_ctl_el0);
+	vcpu->vc_cntv_cval_el0 = READ_SPECIALREG(cntv_cval_el0);
+
+	/* Disable virtual timer in host context and clear offset */
+	WRITE_SPECIALREG(cntv_ctl_el0, 0);
+	WRITE_SPECIALREG(cntvoff_el2, 0);
+	__asm volatile("isb" ::: "memory");
+}
+
+static void
+vmm_restore_guest_gic(struct vcpu *vcpu)
+{
+	int i, nr_lrs;
+
+	if (!vmm_softc->sc_md.has_gicv3)
+		return;
+
+	nr_lrs = vcpu->vc_gic.vg_nr_lrs;
+	WRITE_SPECIALREG(ich_vmcr_el2, vcpu->vc_gic.vg_vmcr);
+	WRITE_SPECIALREG(ich_hcr_el2, vcpu->vc_gic.vg_hcr);
+
+	WRITE_SPECIALREG(ich_ap0r0_el2, vcpu->vc_gic.vg_ap0r[0]);
+	WRITE_SPECIALREG(ich_ap1r0_el2, vcpu->vc_gic.vg_ap1r[0]);
+
+	for (i = 0; i < nr_lrs; i++) {
+		switch (i) {
+		case 0:  WRITE_SPECIALREG(ich_lr0_el2, vcpu->vc_gic.vg_lr[0]); break;
+		case 1:  WRITE_SPECIALREG(ich_lr1_el2, vcpu->vc_gic.vg_lr[1]); break;
+		case 2:  WRITE_SPECIALREG(ich_lr2_el2, vcpu->vc_gic.vg_lr[2]); break;
+		case 3:  WRITE_SPECIALREG(ich_lr3_el2, vcpu->vc_gic.vg_lr[3]); break;
+		case 4:  WRITE_SPECIALREG(ich_lr4_el2, vcpu->vc_gic.vg_lr[4]); break;
+		case 5:  WRITE_SPECIALREG(ich_lr5_el2, vcpu->vc_gic.vg_lr[5]); break;
+		case 6:  WRITE_SPECIALREG(ich_lr6_el2, vcpu->vc_gic.vg_lr[6]); break;
+		case 7:  WRITE_SPECIALREG(ich_lr7_el2, vcpu->vc_gic.vg_lr[7]); break;
+		case 8:  WRITE_SPECIALREG(ich_lr8_el2, vcpu->vc_gic.vg_lr[8]); break;
+		case 9:  WRITE_SPECIALREG(ich_lr9_el2, vcpu->vc_gic.vg_lr[9]); break;
+		case 10: WRITE_SPECIALREG(ich_lr10_el2, vcpu->vc_gic.vg_lr[10]); break;
+		case 11: WRITE_SPECIALREG(ich_lr11_el2, vcpu->vc_gic.vg_lr[11]); break;
+		case 12: WRITE_SPECIALREG(ich_lr12_el2, vcpu->vc_gic.vg_lr[12]); break;
+		case 13: WRITE_SPECIALREG(ich_lr13_el2, vcpu->vc_gic.vg_lr[13]); break;
+		case 14: WRITE_SPECIALREG(ich_lr14_el2, vcpu->vc_gic.vg_lr[14]); break;
+		case 15: WRITE_SPECIALREG(ich_lr15_el2, vcpu->vc_gic.vg_lr[15]); break;
+		}
+	}
+	__asm volatile("isb" ::: "memory");
+}
+
+static void
+vmm_save_guest_gic(struct vcpu *vcpu)
+{
+	int i, nr_lrs;
+
+	if (!vmm_softc->sc_md.has_gicv3)
+		return;
+
+	nr_lrs = vcpu->vc_gic.vg_nr_lrs;
+	vcpu->vc_gic.vg_hcr = READ_SPECIALREG(ich_hcr_el2);
+	vcpu->vc_gic.vg_vmcr = READ_SPECIALREG(ich_vmcr_el2);
+	vcpu->vc_gic.vg_misr = READ_SPECIALREG(ich_misr_el2);
+	vcpu->vc_gic.vg_eisr = READ_SPECIALREG(ich_eisr_el2);
+	vcpu->vc_gic.vg_elrsr = READ_SPECIALREG(ich_elrsr_el2);
+
+	vcpu->vc_gic.vg_ap0r[0] = READ_SPECIALREG(ich_ap0r0_el2);
+	vcpu->vc_gic.vg_ap1r[0] = READ_SPECIALREG(ich_ap1r0_el2);
+
+	for (i = 0; i < nr_lrs; i++) {
+		switch (i) {
+		case 0:  vcpu->vc_gic.vg_lr[0] = READ_SPECIALREG(ich_lr0_el2); break;
+		case 1:  vcpu->vc_gic.vg_lr[1] = READ_SPECIALREG(ich_lr1_el2); break;
+		case 2:  vcpu->vc_gic.vg_lr[2] = READ_SPECIALREG(ich_lr2_el2); break;
+		case 3:  vcpu->vc_gic.vg_lr[3] = READ_SPECIALREG(ich_lr3_el2); break;
+		case 4:  vcpu->vc_gic.vg_lr[4] = READ_SPECIALREG(ich_lr4_el2); break;
+		case 5:  vcpu->vc_gic.vg_lr[5] = READ_SPECIALREG(ich_lr5_el2); break;
+		case 6:  vcpu->vc_gic.vg_lr[6] = READ_SPECIALREG(ich_lr6_el2); break;
+		case 7:  vcpu->vc_gic.vg_lr[7] = READ_SPECIALREG(ich_lr7_el2); break;
+		case 8:  vcpu->vc_gic.vg_lr[8] = READ_SPECIALREG(ich_lr8_el2); break;
+		case 9:  vcpu->vc_gic.vg_lr[9] = READ_SPECIALREG(ich_lr9_el2); break;
+		case 10: vcpu->vc_gic.vg_lr[10] = READ_SPECIALREG(ich_lr10_el2); break;
+		case 11: vcpu->vc_gic.vg_lr[11] = READ_SPECIALREG(ich_lr11_el2); break;
+		case 12: vcpu->vc_gic.vg_lr[12] = READ_SPECIALREG(ich_lr12_el2); break;
+		case 13: vcpu->vc_gic.vg_lr[13] = READ_SPECIALREG(ich_lr13_el2); break;
+		case 14: vcpu->vc_gic.vg_lr[14] = READ_SPECIALREG(ich_lr14_el2); break;
+		case 15: vcpu->vc_gic.vg_lr[15] = READ_SPECIALREG(ich_lr15_el2); break;
+		}
+	}
+
+	WRITE_SPECIALREG(ich_hcr_el2, 0);
+	__asm volatile("isb" ::: "memory");
+}
+
+static void
+vmm_inject_intr(struct vcpu *vcpu)
+{
+	uint64_t lr;
+	uint32_t vector;
+	int i, nr_lrs;
+
+	if (vcpu->vc_inject.vie_type != VCPU_INJECT_INTR &&
+	    atomic_load_int(&vcpu->vc_intr_latch) == 0)
+		return;
+
+	vector = (vcpu->vc_inject.vie_type == VCPU_INJECT_INTR) ?
+	    vcpu->vc_inject.vie_vector : 0;
+
+	if (vmm_softc->sc_md.has_gicv3) {
+		nr_lrs = vcpu->vc_gic.vg_nr_lrs;
+
+		for (i = 0; i < nr_lrs; i++) {
+			lr = vcpu->vc_gic.vg_lr[i];
+			if ((lr & ICH_LR_STATE_MASK) != ICH_LR_STATE_INVALID &&
+			    (lr & ICH_LR_VINTID_MASK) == vector) {
+				vcpu->vc_inject.vie_type = VCPU_INJECT_NONE;
+				atomic_swap_uint(&vcpu->vc_intr_latch, 0);
+				return;
+			}
+		}
+
+		for (i = 0; i < nr_lrs; i++) {
+			if ((vcpu->vc_gic.vg_lr[i] & ICH_LR_STATE_MASK) ==
+			    ICH_LR_STATE_INVALID) {
+				vcpu->vc_gic.vg_lr[i] = (uint64_t)vector |
+				    ICH_LR_GROUP | ICH_LR_STATE_PENDING |
+				    ((uint64_t)0xa0 << ICH_LR_PRIORITY_SHIFT);
+				vcpu->vc_inject.vie_type = VCPU_INJECT_NONE;
+				atomic_swap_uint(&vcpu->vc_intr_latch, 0);
+				return;
+			}
+		}
+	}
+
+	/* Fallback: assert Virtual IRQ via HCR_VI */
+	vcpu->vc_hcr_el2 |= HCR_VI;
+	vcpu->vc_inject.vie_type = VCPU_INJECT_NONE;
+	atomic_swap_uint(&vcpu->vc_intr_latch, 0);
+}
+
 int
 vmm_get_guest_memtype(struct vm *vm, paddr_t gpa)
 {
@@ -384,19 +569,34 @@ vmm_vhe_handle_exit(struct vcpu *vcpu, struct vm_run_params *vrp)
 	uint32_t ec, esr = vcpu->vc_esr_el2;
 	int memtype;
 
+	if (vcpu->vc_exit_type == VCPU_EXIT_TYPE_IRQ ||
+	    vcpu->vc_exit_type == VCPU_EXIT_TYPE_FIQ)
+		return (VMM_ACTION_RETRY);
+
+	if (vcpu->vc_exit_type == VCPU_EXIT_TYPE_SERROR) {
+		vrp->vrp_exit_reason = VM_EXIT_ARM64_UNKNOWN;
+		return (VMM_ACTION_TERMINATE);
+	}
+
 	ec = ESR_ELx_EXCEPTION(esr);
 	switch (ec) {
 	case EXCP_UNKNOWN:
 		vrp->vrp_exit_reason = VM_EXIT_ARM64_UNKNOWN;
+		break;
+	case EXCP_WFI_WFE:
+		vcpu->vc_regs.vrs_pc += 4;
+		vrp->vrp_exit_reason = VM_EXIT_ARM64_WFI;
 		break;
 	case EXCP_FP_SIMD:
 	case EXCP_TRAP_FP:
 		vrp->vrp_exit_reason = VM_EXIT_ARM64_FP_TRAP;
 		break;
 	case EXCP_HVC:
+		vcpu->vc_regs.vrs_pc += 4;
 		vrp->vrp_exit_reason = VM_EXIT_ARM64_HVC;
 		break;
 	case EXCP_SMC:
+		vcpu->vc_regs.vrs_pc += 4;
 		vrp->vrp_exit_reason = VM_EXIT_ARM64_SMC;
 		break;
 	case EXCP_MSR:
@@ -454,7 +654,7 @@ vm_run(struct vm *vm, struct vm_run_params *vrp)
 {
 	struct vcpu *vcpu;
 	enum vmm_action action;
-	uint64_t host_hcr;
+	uint64_t host_cnthctl, host_hcr;
 	u_int next, old;
 	int ret = 0;
 
@@ -486,17 +686,34 @@ vm_run(struct vm *vm, struct vm_run_params *vrp)
 
 	WRITE_ONCE(vcpu->vc_curcpu, curcpu());
 
-	/* Save host HCR_EL2 (HCR_E2H | HCR_TGE) */
+	/* Save host HCR_EL2 and CNTHCTL_EL2 */
 	host_hcr = READ_SPECIALREG(hcr_el2);
+	host_cnthctl = READ_SPECIALREG(cnthctl_el2);
 
-	/* Set up guest Stage-2 translation base and guest HCR_EL2 */
+	/* Set up guest Stage-2 translation base */
 	WRITE_SPECIALREG(vtcr_el2, vcpu->vc_vtcr_el2);
 	WRITE_SPECIALREG(vttbr_el2, vcpu->vc_vttbr_el2);
+
+	/* Allow guest access to counters and virtual timer */
+	WRITE_SPECIALREG(cnthctl_el2, host_cnthctl | CNTHCTL_EL1PCEN |
+	    CNTHCTL_EL1PCTEN | CNTHCTL_EL1PTEN | CNTHCTL_EL0VTEN |
+	    CNTHCTL_EL0PTEN);
+
+	/* Inject pending interrupt if requested */
+	vmm_inject_intr(vcpu);
+
+	/* Set guest HCR_EL2 */
 	WRITE_SPECIALREG(hcr_el2, vcpu->vc_hcr_el2);
 	__asm volatile("isb" ::: "memory");
 
 	/* Restore guest system registers */
 	vmm_restore_guest_sysregs(vcpu);
+
+	/* Restore guest virtual timer */
+	vmm_restore_guest_timer(vcpu);
+
+	/* Restore guest GICv3 virtual CPU interface */
+	vmm_restore_guest_gic(vcpu);
 
 	for (;;) {
 		if (vcpu_must_yield(vcpu)) {
@@ -510,15 +727,28 @@ vm_run(struct vm *vm, struct vm_run_params *vrp)
 
 		/* Classify exit */
 		action = vmm_vhe_handle_exit(vcpu, vrp);
-		if (action == VMM_ACTION_RETRY)
+		if (action == VMM_ACTION_RETRY) {
+			vmm_inject_intr(vcpu);
+			WRITE_SPECIALREG(hcr_el2, vcpu->vc_hcr_el2);
 			continue;
+		}
 
 		break;
 	}
 
-	/* Restore host HCR_EL2 */
+	/* Save guest GICv3 virtual CPU interface */
+	vmm_save_guest_gic(vcpu);
+
+	/* Save guest virtual timer */
+	vmm_save_guest_timer(vcpu);
+
+	/* Restore host HCR_EL2 and CNTHCTL_EL2 */
 	WRITE_SPECIALREG(hcr_el2, host_hcr);
+	WRITE_SPECIALREG(cnthctl_el2, host_cnthctl);
 	__asm volatile("isb" ::: "memory");
+
+	/* Clear temporary HCR_VI if set */
+	vcpu->vc_hcr_el2 &= ~HCR_VI;
 
 	/* Save guest system registers */
 	vmm_save_guest_sysregs(vcpu);

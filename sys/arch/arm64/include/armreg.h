@@ -80,6 +80,9 @@
 #define	CNTHCTL_EVNTEN		(1 << 2) /* Enable event stream */
 #define	CNTHCTL_EL1PCEN		(1 << 1) /* Allow EL0/1 physical timer access */
 #define	CNTHCTL_EL1PCTEN	(1 << 0) /*Allow EL0/1 physical counter access*/
+#define	CNTHCTL_EL1PTEN		(1 << 11) /* Allow EL1 physical timer access */
+#define	CNTHCTL_EL0VTEN		(1 << 9) /* Allow EL0 virtual timer access */
+#define	CNTHCTL_EL0PTEN		(1 << 8) /* Allow EL0 physical timer access */
 
 /* CNTKCTL_EL1 - Counter-timer Kernel Control Register */
 #define	CNTKCTL_EL0VCTEN	(1 << 1) /* Allow EL0 virtual counter access */
@@ -210,6 +213,7 @@
 #define	ESR_ELx_EC_MASK		(0x3f << 26)
 #define	ESR_ELx_EXCEPTION(esr)	(((esr) & ESR_ELx_EC_MASK) >> ESR_ELx_EC_SHIFT)
 #define	 EXCP_UNKNOWN		0x00	/* Unkwn exception */
+#define	 EXCP_WFI_WFE		0x01	/* Trapped WFI or WFE */
 #define	 EXCP_FP_SIMD		0x07	/* FP/SIMD trap */
 #define	 EXCP_BRANCH_TGT	0x0d	/* Branch target exception */
 #define	 EXCP_ILL_STATE		0x0e	/* Illegal execution state */

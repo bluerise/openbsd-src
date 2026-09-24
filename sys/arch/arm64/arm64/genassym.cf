@@ -88,6 +88,7 @@ member	VCPU_REGS	vc_regs
 member	VCPU_HPFAR_EL2	vc_hpfar_el2
 member	VCPU_FAR_EL2	vc_far_el2
 member	VCPU_ESR_EL2	vc_esr_el2
+member	VCPU_EXIT_TYPE	vc_exit_type
 
 struct	vcpu_reg_state
 member	VRS_GPRS	vrs_gprs

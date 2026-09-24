@@ -39,6 +39,23 @@ struct vmm_softc_md {
 	/* Capabilities */
 	uint32_t		nr_cpus;	/* [I] */
 	int			has_vhe;	/* [I] */
+	int			has_gicv3;	/* [I] */
+	uint32_t		nr_lrs;		/* [I] */
+};
+
+#define VMM_ARM64_MAX_LRS	16
+#define VMM_ARM64_MAX_APR	4
+
+struct vcpu_gic_state {
+	uint32_t		vg_hcr;
+	uint32_t		vg_vmcr;
+	uint32_t		vg_misr;
+	uint32_t		vg_eisr;
+	uint32_t		vg_elrsr;
+	uint32_t		vg_ap0r[VMM_ARM64_MAX_APR];
+	uint32_t		vg_ap1r[VMM_ARM64_MAX_APR];
+	uint64_t		vg_lr[VMM_ARM64_MAX_LRS];
+	uint8_t			vg_nr_lrs;
 };
 
 /*
@@ -200,6 +217,9 @@ struct vcpu {
 	uint32_t		 vc_cntv_ctl_el0;
 	uint64_t		 vc_cntvoff_el2;
 
+	/* GICv3 Virtual CPU Interface */
+	struct vcpu_gic_state	 vc_gic;
+
 	/* Hypervisor / Stage 2 control */
 	uint64_t		 vc_vttbr_el2;
 	uint64_t		 vc_vtcr_el2;
@@ -213,6 +233,11 @@ struct vcpu {
 	uint64_t		 vc_hpfar_el2;
 	uint64_t		 vc_far_el2;
 	uint32_t		 vc_esr_el2;
+	uint32_t		 vc_exit_type;
+#define VCPU_EXIT_TYPE_SYNC	0
+#define VCPU_EXIT_TYPE_IRQ	1
+#define VCPU_EXIT_TYPE_FIQ	2
+#define VCPU_EXIT_TYPE_SERROR	3
 };
 
 SLIST_HEAD(vcpu_head, vcpu);

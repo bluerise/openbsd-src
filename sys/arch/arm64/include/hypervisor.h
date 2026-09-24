@@ -159,5 +159,70 @@
 #define	S2_XN_NONE			(0x0ULL << 53)
 #define	S2_XN_ALL			(0x2ULL << 53)
 
+/*
+ * GICv3 Virtual CPU Interface (ICH_*_EL2)
+ */
+#define	ICH_HCR_EN			(1ULL << 0)
+#define	ICH_HCR_UIE			(1ULL << 1)
+#define	ICH_HCR_LRENPIE			(1ULL << 2)
+#define	ICH_HCR_NPIE			(1ULL << 3)
+#define	ICH_HCR_VGRP0EIE		(1ULL << 4)
+#define	ICH_HCR_VGRP0DIE		(1ULL << 5)
+#define	ICH_HCR_VGRP1EIE		(1ULL << 6)
+#define	ICH_HCR_VGRP1DIE		(1ULL << 7)
+#define	ICH_HCR_TC			(1ULL << 10)
+#define	ICH_HCR_TALL0			(1ULL << 11)
+#define	ICH_HCR_TALL1			(1ULL << 12)
+#define	ICH_HCR_TSEI			(1ULL << 13)
+#define	ICH_HCR_TDIR			(1ULL << 14)
+#define	ICH_HCR_DVIM			(1ULL << 15)
+
+#define	ICH_VTR_LIST_SHIFT		0
+#define	ICH_VTR_LIST_MASK		(0x1fULL << ICH_VTR_LIST_SHIFT)
+#define	ICH_VTR_TDFD			(1ULL << 19)
+#define	ICH_VTR_SEIM_SHIFT		20
+#define	ICH_VTR_SEIM_MASK		(0x3ULL << ICH_VTR_SEIM_SHIFT)
+#define	ICH_VTR_A3V			(1ULL << 21)
+#define	ICH_VTR_IDBITS_SHIFT		23
+#define	ICH_VTR_IDBITS_MASK		(0x7ULL << ICH_VTR_IDBITS_SHIFT)
+#define	ICH_VTR_PRE_SHIFT		26
+#define	ICH_VTR_PRE_MASK		(0x7ULL << ICH_VTR_PRE_SHIFT)
+#define	ICH_VTR_PRI_SHIFT		29
+#define	ICH_VTR_PRI_MASK		(0x7ULL << ICH_VTR_PRI_SHIFT)
+
+#define	ICH_VMCR_VENG0			(1ULL << 0)
+#define	ICH_VMCR_VENG1			(1ULL << 1)
+#define	ICH_VMCR_VCBPR			(1ULL << 4)
+#define	ICH_VMCR_VFIQEN			(1ULL << 9)
+#define	ICH_VMCR_VBPR1_SHIFT		18
+#define	ICH_VMCR_VBPR1_MASK		(0x7ULL << ICH_VMCR_VBPR1_SHIFT)
+#define	ICH_VMCR_VBPR0_SHIFT		21
+#define	ICH_VMCR_VBPR0_MASK		(0x7ULL << ICH_VMCR_VBPR0_SHIFT)
+#define	ICH_VMCR_VPMR_SHIFT		24
+#define	ICH_VMCR_VPMR_MASK		(0xffULL << ICH_VMCR_VPMR_SHIFT)
+
+#define	ICH_MISR_EOI			(1ULL << 0)
+#define	ICH_MISR_U			(1ULL << 1)
+#define	ICH_MISR_LRENP			(1ULL << 2)
+#define	ICH_MISR_NP			(1ULL << 3)
+#define	ICH_MISR_VGRP0E			(1ULL << 4)
+#define	ICH_MISR_VGRP0D			(1ULL << 5)
+#define	ICH_MISR_VGRP1E			(1ULL << 6)
+#define	ICH_MISR_VGRP1D			(1ULL << 7)
+
+#define	ICH_LR_VINTID_MASK		0xffffffffULL
+#define	ICH_LR_PINTID_SHIFT		32
+#define	ICH_LR_PINTID_MASK		(0x3ffULL << ICH_LR_PINTID_SHIFT)
+#define	ICH_LR_PRIORITY_SHIFT		48
+#define	ICH_LR_PRIORITY_MASK		(0xffULL << ICH_LR_PRIORITY_SHIFT)
+#define	ICH_LR_GROUP			(1ULL << 60)
+#define	ICH_LR_HW			(1ULL << 61)
+#define	ICH_LR_STATE_SHIFT		62
+#define	ICH_LR_STATE_MASK		(0x3ULL << ICH_LR_STATE_SHIFT)
+#define	ICH_LR_STATE_INVALID		(0x0ULL << ICH_LR_STATE_SHIFT)
+#define	ICH_LR_STATE_PENDING		(0x1ULL << ICH_LR_STATE_SHIFT)
+#define	ICH_LR_STATE_ACTIVE		(0x2ULL << ICH_LR_STATE_SHIFT)
+#define	ICH_LR_STATE_PENDACT		(0x3ULL << ICH_LR_STATE_SHIFT)
+
 #endif
 

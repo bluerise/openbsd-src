@@ -73,29 +73,38 @@ arm64_vhe_guest_vectors:
 arm64_vhe_guest_exit_sync:
 	/*
 	 * Exception taken to EL2. Stack currently holds host save frame.
-	 * x0 has pointer to struct vcpu saved on stack.
+	 * Save guest x2 at [sp, #24] and set x2 to exit type 0 (SYNC).
 	 */
+	str	x2, [sp, #24]
+	mov	x2, #0
 	b	arm64_vhe_guest_exit
 
 arm64_vhe_guest_exit_irq:
+	str	x2, [sp, #24]
+	mov	x2, #1
 	b	arm64_vhe_guest_exit
 
 arm64_vhe_guest_exit_fiq:
+	str	x2, [sp, #24]
+	mov	x2, #2
 	b	arm64_vhe_guest_exit
 
 arm64_vhe_guest_exit_serror:
+	str	x2, [sp, #24]
+	mov	x2, #3
 	b	arm64_vhe_guest_exit
 
 arm64_vhe_guest_exit:
 	/*
 	 * Exception taken to EL2. Host sp still points to the host frame.
-	 * Stash guest x1 and x2 into free stack slots.
+	 * Guest x2 is already saved at [sp, #24], and x2 holds the exit type.
+	 * Stash guest x1 into free stack slot.
 	 */
 	str	x1, [sp, #8]
-	str	x2, [sp, #24]
 
 	/* Load vcpu pointer from [sp, #0] into x1 */
 	ldr	x1, [sp, #0]
+	str	w2, [x1, #VCPU_EXIT_TYPE]
 	add	x1, x1, #VCPU_REGS
 
 	/* Save guest X0 */
@@ -141,6 +150,9 @@ arm64_vhe_guest_exit:
 	msr	vbar_el2, x7
 	isb
 
+	/* Load exit type to return in x0 */
+	ldr	w0, [x0, #VCPU_EXIT_TYPE]
+
 	/* Restore host callee-saved registers x19-x30 */
 	ldp	x19, x20, [sp, #32]
 	ldp	x21, x22, [sp, #48]
@@ -150,8 +162,6 @@ arm64_vhe_guest_exit:
 	ldp	x29, lr,  [sp, #112]
 	add	sp, sp, #128
 
-	/* Return 0 on normal trap to host */
-	mov	x0, #0
 	ret
 
 /*

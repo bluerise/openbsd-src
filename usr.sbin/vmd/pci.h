@@ -141,11 +141,13 @@ void pci_deassert_irq(uint8_t);
 uint8_t pci_get_dev_irq(uint8_t);
 uint16_t pci_get_subsys_id(uint8_t);
 
+#if defined(__amd64__) || defined(__aarch64__)
+int pci_handle_mmio(uint32_t, int, paddr_t, uint8_t, uint64_t *);
+#endif
 #ifdef __amd64__
 void pci_handle_address_reg(struct vm_run_params *);
 void pci_handle_data_reg(struct vm_run_params *);
 uint8_t pci_handle_io(struct vm_run_params *);
-int pci_handle_mmio(uint32_t, int, paddr_t, uint8_t, uint64_t *);
 #endif /* __amd64__ */
 
 #endif /* _PCI_H_ */

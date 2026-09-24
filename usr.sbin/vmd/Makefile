@@ -17,6 +17,11 @@ SRCS+=		i82093aa.c lapic.c
 .endif # amd64
 .if ${MACHINE} == "arm64"
 SRCS+=		arm64_vm.c
+.if !exists(${.OBJDIR}/machine)
+_machine_symlink!= ln -sf ${.CURDIR}/../../sys/arch/${MACHINE}/include ${.OBJDIR}/machine
+.endif
+CFLAGS+=	-I${.OBJDIR}
+CLEANFILES+=	machine
 .endif # arm64
 
 CFLAGS+=	-Wall -I${.CURDIR}

@@ -74,8 +74,10 @@ static int pci_msix_mmio(uint32_t, int, uint32_t, uint8_t, uint64_t *,
 static void pci_msi_deliver(uint64_t, uint32_t);
 static int pci_msi_enabled(struct pci_dev *);
 static int pci_msix_enabled(struct pci_dev *);
+#ifdef __amd64__
 static void pci_config_write(struct pci_dev *, uint8_t, uint8_t, uint8_t,
     uint32_t);
+#endif
 static void pci_msix_drain(struct pci_dev *);
 
 /* PIC IRQs, assigned to devices in order */
@@ -629,7 +631,7 @@ pci_init(void)
 	}
 }
 
-#ifdef __amd64__
+#if defined(__amd64__) || defined(__aarch64__)
 int
 pci_handle_mmio(uint32_t vcpu_id, int dir, paddr_t addr, uint8_t size,
     uint64_t *data)
@@ -659,7 +661,9 @@ pci_handle_mmio(uint32_t vcpu_id, int dir, paddr_t addr, uint8_t size,
 		*data = UINT64_MAX;
 	return (0);
 }
+#endif
 
+#ifdef __amd64__
 static void
 pci_config_write(struct pci_dev *dev, uint8_t reg, uint8_t ofs, uint8_t sz,
     uint32_t data)

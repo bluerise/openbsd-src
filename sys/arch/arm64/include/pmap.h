@@ -70,6 +70,7 @@ struct pmap {
 	int pm_privileged;
 	volatile int pm_active;
 	int pm_refs;				/* ref count */
+	int pm_type;
 	struct pmap_statistics  pm_stats;	/* pmap statistics */
 	uint64_t pm_apiakey[2];
 	uint64_t pm_apdakey[2];
@@ -82,6 +83,11 @@ struct pmap {
 #define PMAP_NOCACHE	0x1 /* non-cacheable memory */
 #define PMAP_DEVICE	0x2 /* device memory */
 #define PMAP_WC		PMAP_DEVICE
+
+#define PMAP_TYPE_NORMAL	1
+#define PMAP_TYPE_STAGE2	2
+#define pmap_nested(pm)		((pm)->pm_type != PMAP_TYPE_NORMAL)
+#define pmap_is_stage2(pm)	((pm)->pm_type == PMAP_TYPE_STAGE2)
 
 #define PG_PMAP_MOD		PG_PMAP0
 #define PG_PMAP_REF		PG_PMAP1
@@ -109,6 +115,7 @@ void pmap_page_ro(pmap_t pm, vaddr_t va, vm_prot_t prot);
 void pmap_page_rw(pmap_t pm, vaddr_t va);
 
 void pmap_setpauthkeys(struct pmap *);
+void pmap_convert(struct pmap *, int);
 
 paddr_t pmap_steal_avail(size_t size, int align, void **kva);
 void pmap_avail_fixup(void);

@@ -17,6 +17,7 @@
 
 #include <machine/asm.h>
 #include <machine/param.h>
+#include "assym.h"
 
 	.text
 	.align 11
@@ -87,43 +88,53 @@ arm64_vhe_guest_exit_serror:
 
 arm64_vhe_guest_exit:
 	/*
-	 * Restore x0 pointer to struct vcpu from stack top
+	 * Exception taken to EL2. Host sp still points to the host frame.
+	 * Stash guest x1 and x2 into free stack slots.
 	 */
-	ldr	x0, [sp, #0]
+	str	x1, [sp, #8]
+	str	x2, [sp, #24]
 
-	/* Save guest X1 - X30 to vcpu->vc_regs.vrs_gprs */
-	stp	x1,  x2,  [x0, #(16 + 1 * 8)]
-	stp	x3,  x4,  [x0, #(16 + 3 * 8)]
-	stp	x5,  x6,  [x0, #(16 + 5 * 8)]
-	stp	x7,  x8,  [x0, #(16 + 7 * 8)]
-	stp	x9,  x10, [x0, #(16 + 9 * 8)]
-	stp	x11, x12, [x0, #(16 + 11 * 8)]
-	stp	x13, x14, [x0, #(16 + 13 * 8)]
-	stp	x15, x16, [x0, #(16 + 15 * 8)]
-	stp	x17, x18, [x0, #(16 + 17 * 8)]
-	stp	x19, x20, [x0, #(16 + 19 * 8)]
-	stp	x21, x22, [x0, #(16 + 21 * 8)]
-	stp	x23, x24, [x0, #(16 + 23 * 8)]
-	stp	x25, x26, [x0, #(16 + 25 * 8)]
-	stp	x27, x28, [x0, #(16 + 27 * 8)]
-	stp	x29, lr,  [x0, #(16 + 29 * 8)]
+	/* Load vcpu pointer from [sp, #0] into x1 */
+	ldr	x1, [sp, #0]
+	add	x1, x1, #VCPU_REGS
 
-	/* Save guest X0 from temporary stash on stack */
-	ldr	x1, [sp, #8]
-	str	x1, [x0, #(16 + 0 * 8)]
+	/* Save guest X0 */
+	str	x0, [x1, #(VRS_GPRS + 0 * 8)]
+
+	/* Save guest X3 - X30 */
+	stp	x3,  x4,  [x1, #(VRS_GPRS + 3 * 8)]
+	stp	x5,  x6,  [x1, #(VRS_GPRS + 5 * 8)]
+	stp	x7,  x8,  [x1, #(VRS_GPRS + 7 * 8)]
+	stp	x9,  x10, [x1, #(VRS_GPRS + 9 * 8)]
+	stp	x11, x12, [x1, #(VRS_GPRS + 11 * 8)]
+	stp	x13, x14, [x1, #(VRS_GPRS + 13 * 8)]
+	stp	x15, x16, [x1, #(VRS_GPRS + 15 * 8)]
+	stp	x17, x18, [x1, #(VRS_GPRS + 17 * 8)]
+	stp	x19, x20, [x1, #(VRS_GPRS + 19 * 8)]
+	stp	x21, x22, [x1, #(VRS_GPRS + 21 * 8)]
+	stp	x23, x24, [x1, #(VRS_GPRS + 23 * 8)]
+	stp	x25, x26, [x1, #(VRS_GPRS + 25 * 8)]
+	stp	x27, x28, [x1, #(VRS_GPRS + 27 * 8)]
+	stp	x29, lr,  [x1, #(VRS_GPRS + 29 * 8)]
+
+	/* Restore stashed guest x1 and x2 and save them to vcpu->vc_regs */
+	ldr	x3, [sp, #8]
+	ldr	x4, [sp, #24]
+	stp	x3, x4, [x1, #(VRS_GPRS + 1 * 8)]
 
 	/* Save EL2 syndrome & fault registers */
+	ldr	x0, [sp, #0]
 	mrs	x2, esr_el2
 	mrs	x3, far_el2
 	mrs	x4, hpfar_el2
 	mrs	x5, elr_el2
 	mrs	x6, spsr_el2
 
-	str	w2, [x0, #96]	/* vc_esr_el2 */
-	str	x3, [x0, #80]	/* vc_far_el2 */
-	str	x4, [x0, #72]	/* vc_hpfar_el2 */
-	str	x5, [x0, #40]	/* vrs_pc */
-	str	x6, [x0, #56]	/* vrs_spsr */
+	str	w2, [x0, #VCPU_ESR_EL2]
+	str	x3, [x0, #VCPU_FAR_EL2]
+	str	x4, [x0, #VCPU_HPFAR_EL2]
+	str	x5, [x1, #VRS_PC]
+	str	x6, [x1, #VRS_SPSR]
 
 	/* Restore host VBAR_EL2 from stack */
 	ldr	x7, [sp, #16]
@@ -171,31 +182,31 @@ ENTRY(arm64_vhe_enter_guest)
 	isb
 
 	/* Load guest PC and SPSR into ELR_EL2 and SPSR_EL2 */
-	ldr	x2, [x0, #40]	/* vrs_pc */
-	ldr	x3, [x0, #56]	/* vrs_spsr */
+	add	x0, x0, #VCPU_REGS
+	ldr	x2, [x0, #VRS_PC]
+	ldr	x3, [x0, #VRS_SPSR]
 	msr	elr_el2, x2
 	msr	spsr_el2, x3
 
-	/* Load guest GPRs X1 - X30 from vcpu->vc_regs */
-	ldp	x1,  x2,  [x0, #(16 + 1 * 8)]
-	ldp	x3,  x4,  [x0, #(16 + 3 * 8)]
-	ldp	x5,  x6,  [x0, #(16 + 5 * 8)]
-	ldp	x7,  x8,  [x0, #(16 + 7 * 8)]
-	ldp	x9,  x10, [x0, #(16 + 9 * 8)]
-	ldp	x11, x12, [x0, #(16 + 11 * 8)]
-	ldp	x13, x14, [x0, #(16 + 13 * 8)]
-	ldp	x15, x16, [x0, #(16 + 15 * 8)]
-	ldp	x17, x18, [x0, #(16 + 17 * 8)]
-	ldp	x19, x20, [x0, #(16 + 19 * 8)]
-	ldp	x21, x22, [x0, #(16 + 21 * 8)]
-	ldp	x23, x24, [x0, #(16 + 23 * 8)]
-	ldp	x25, x26, [x0, #(16 + 25 * 8)]
-	ldp	x27, x28, [x0, #(16 + 27 * 8)]
-	ldp	x29, lr,  [x0, #(16 + 29 * 8)]
+	/* Load guest GPRs X2 - X30 from vcpu->vc_regs */
+	ldp	x2,  x3,  [x0, #(VRS_GPRS + 2 * 8)]
+	ldp	x4,  x5,  [x0, #(VRS_GPRS + 4 * 8)]
+	ldp	x6,  x7,  [x0, #(VRS_GPRS + 6 * 8)]
+	ldp	x8,  x9,  [x0, #(VRS_GPRS + 8 * 8)]
+	ldp	x10, x11, [x0, #(VRS_GPRS + 10 * 8)]
+	ldp	x12, x13, [x0, #(VRS_GPRS + 12 * 8)]
+	ldp	x14, x15, [x0, #(VRS_GPRS + 14 * 8)]
+	ldp	x16, x17, [x0, #(VRS_GPRS + 16 * 8)]
+	ldp	x18, x19, [x0, #(VRS_GPRS + 18 * 8)]
+	ldp	x20, x21, [x0, #(VRS_GPRS + 20 * 8)]
+	ldp	x22, x23, [x0, #(VRS_GPRS + 22 * 8)]
+	ldp	x24, x25, [x0, #(VRS_GPRS + 24 * 8)]
+	ldp	x26, x27, [x0, #(VRS_GPRS + 26 * 8)]
+	ldp	x28, x29, [x0, #(VRS_GPRS + 28 * 8)]
+	ldr	lr,       [x0, #(VRS_GPRS + 30 * 8)]
 
-	/* Stash guest X0 and finally load it */
-	ldr	x0, [x0, #(16 + 0 * 8)]
-	str	x0, [sp, #8]
+	/* Finally load guest X0 and X1 */
+	ldp	x0,  x1,  [x0, #(VRS_GPRS + 0 * 8)]
 
 	/* Enter guest EL1 */
 	eret

@@ -85,5 +85,79 @@
 #define	HCR_APK		0x0000010000000000
 #define	HCR_API		0x0000020000000000
 
+/*
+ * Virtualization Translation Control Register (VTCR_EL2)
+ */
+#define	VTCR_T0SZ_SHIFT		0
+#define	VTCR_T0SZ_MASK		(0x3fULL << VTCR_T0SZ_SHIFT)
+#define	VTCR_T0SZ(x)		((uint64_t)(x) << VTCR_T0SZ_SHIFT)
+
+#define	VTCR_SL0_SHIFT		6
+#define	VTCR_SL0_MASK		(0x3ULL << VTCR_SL0_SHIFT)
+#define	VTCR_SL0_L2		(0x0ULL << VTCR_SL0_SHIFT)
+#define	VTCR_SL0_L1		(0x1ULL << VTCR_SL0_SHIFT)
+#define	VTCR_SL0_L0		(0x2ULL << VTCR_SL0_SHIFT)
+
+#define	VTCR_IRGN0_SHIFT	8
+#define	VTCR_IRGN0_MASK		(0x3ULL << VTCR_IRGN0_SHIFT)
+#define	VTCR_IRGN0_NC		(0x0ULL << VTCR_IRGN0_SHIFT)
+#define	VTCR_IRGN0_WBWA		(0x1ULL << VTCR_IRGN0_SHIFT)
+#define	VTCR_IRGN0_WT		(0x2ULL << VTCR_IRGN0_SHIFT)
+#define	VTCR_IRGN0_WBnWA	(0x3ULL << VTCR_IRGN0_SHIFT)
+
+#define	VTCR_ORGN0_SHIFT	10
+#define	VTCR_ORGN0_MASK		(0x3ULL << VTCR_ORGN0_SHIFT)
+#define	VTCR_ORGN0_NC		(0x0ULL << VTCR_ORGN0_SHIFT)
+#define	VTCR_ORGN0_WBWA		(0x1ULL << VTCR_ORGN0_SHIFT)
+#define	VTCR_ORGN0_WT		(0x2ULL << VTCR_ORGN0_SHIFT)
+#define	VTCR_ORGN0_WBnWA	(0x3ULL << VTCR_ORGN0_SHIFT)
+
+#define	VTCR_SH0_SHIFT		12
+#define	VTCR_SH0_MASK		(0x3ULL << VTCR_SH0_SHIFT)
+#define	VTCR_SH0_NONE		(0x0ULL << VTCR_SH0_SHIFT)
+#define	VTCR_SH0_OUTER		(0x2ULL << VTCR_SH0_SHIFT)
+#define	VTCR_SH0_INNER		(0x3ULL << VTCR_SH0_SHIFT)
+
+#define	VTCR_TG0_SHIFT		14
+#define	VTCR_TG0_MASK		(0x3ULL << VTCR_TG0_SHIFT)
+#define	VTCR_TG0_4K		(0x0ULL << VTCR_TG0_SHIFT)
+#define	VTCR_TG0_64K		(0x1ULL << VTCR_TG0_SHIFT)
+#define	VTCR_TG0_16K		(0x2ULL << VTCR_TG0_SHIFT)
+
+#define	VTCR_PS_SHIFT		16
+#define	VTCR_PS_MASK		(0x7ULL << VTCR_PS_SHIFT)
+#define	VTCR_PS_32BIT		(0x0ULL << VTCR_PS_SHIFT)
+#define	VTCR_PS_36BIT		(0x1ULL << VTCR_PS_SHIFT)
+#define	VTCR_PS_40BIT		(0x2ULL << VTCR_PS_SHIFT)
+#define	VTCR_PS_42BIT		(0x3ULL << VTCR_PS_SHIFT)
+#define	VTCR_PS_44BIT		(0x4ULL << VTCR_PS_SHIFT)
+#define	VTCR_PS_48BIT		(0x5ULL << VTCR_PS_SHIFT)
+
+#define	VTCR_RES1		(1ULL << 31)
+
+/*
+ * Virtualization Translation Table Base Register (VTTBR_EL2)
+ */
+#define	VTTBR_VMID_SHIFT	48
+#define	VTTBR_VMID_MASK		(0xffffULL << VTTBR_VMID_SHIFT)
+#define	VTTBR_VMID(x)		((uint64_t)(x) << VTTBR_VMID_SHIFT)
+#define	VTTBR_BADDR_MASK	0x0000ffffffffffffULL
+
+/*
+ * Stage 2 Memory Descriptors
+ */
+#define	S2_MEMATTR_DEVICE_nGnRnE	(0x0ULL << 2)
+#define	S2_MEMATTR_NORMAL_WB		(0xfULL << 2)
+#define	S2_AP_NONE			(0x0ULL << 6)
+#define	S2_AP_RO			(0x1ULL << 6)
+#define	S2_AP_WO			(0x2ULL << 6)
+#define	S2_AP_RW			(0x3ULL << 6)
+#define	S2_SH_NONE			(0x0ULL << 8)
+#define	S2_SH_OUTER			(0x2ULL << 8)
+#define	S2_SH_INNER			(0x3ULL << 8)
+#define	S2_AF				(0x1ULL << 10)
+#define	S2_XN_NONE			(0x0ULL << 53)
+#define	S2_XN_ALL			(0x2ULL << 53)
+
 #endif
 

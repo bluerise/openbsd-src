@@ -121,6 +121,12 @@ enum {
 	VMM_MODE_ARM64
 };
 
+enum {
+	VMM_MEM_TYPE_REGULAR,
+	VMM_MEM_TYPE_MMIO,
+	VMM_MEM_TYPE_UNKNOWN
+};
+
 /* IOCTL definitions */
 #define VMM_IOC_INTR _IOW('V', 6, struct vm_intr_params) /* Intr pending */
 
@@ -222,6 +228,8 @@ int	vcpu_init(struct vcpu *, struct vm_create_params *);
 void	vcpu_deinit(struct vcpu *);
 int	vm_rwregs(struct vm *, struct vm_rwregs_params *, int);
 int	vcpu_reset_regs(struct vcpu *, struct vcpu_reg_state *);
+int	vmm_get_guest_memtype(struct vm *, paddr_t);
+vaddr_t	vmm_translate_gpa(struct vm *, paddr_t);
 
 #ifdef MULTIPROCESSOR
 void	arm_send_ipi(struct cpu_info *, int);

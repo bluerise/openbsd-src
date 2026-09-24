@@ -80,3 +80,17 @@ member	sf_x25
 member	sf_x27
 member	sf_x29
 define	SWITCHFRAME_SZ sizeof(struct switchframe)
+
+include <machine/vmmvar.h>
+
+struct	vcpu
+member	VCPU_REGS	vc_regs
+member	VCPU_HPFAR_EL2	vc_hpfar_el2
+member	VCPU_FAR_EL2	vc_far_el2
+member	VCPU_ESR_EL2	vc_esr_el2
+
+struct	vcpu_reg_state
+member	VRS_GPRS	vrs_gprs
+member	VRS_PC		vrs_pc
+member	VRS_SP		vrs_sp
+member	VRS_SPSR	vrs_spsr

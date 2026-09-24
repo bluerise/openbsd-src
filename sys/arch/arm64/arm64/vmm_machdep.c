@@ -99,6 +99,7 @@ vmm_stop(void)
 int
 vm_impl_init(struct vm *vm, struct proc *p)
 {
+	pmap_convert(vm->vm_pmap, PMAP_TYPE_STAGE2);
 	return (0);
 }
 
@@ -110,14 +111,30 @@ vm_impl_deinit(struct vm *vm)
 int
 vcpu_init(struct vcpu *vcpu, struct vm_create_params *vcp)
 {
+	uint64_t mmfr0, vtcr;
+
 	vcpu->vc_virt_mode = vmm_softc->mode;
 	vcpu->vc_state = VCPU_STATE_STOPPED;
-	vcpu->vc_vpid = 0;
+	vcpu->vc_vpid = vcpu->vc_parent->vm_id;
 	vcpu->vc_last_pcpu = NULL;
 	rw_init(&vcpu->vc_lock, "vcpu");
 
 	/* Initial HCR_EL2 configuration for 64-bit guest execution */
 	vcpu->vc_hcr_el2 = HCR_RW | HCR_VM | HCR_AMO | HCR_IMO | HCR_FMO;
+
+	/* Setup VTCR_EL2 and VTTBR_EL2 for Stage 2 translation */
+	mmfr0 = READ_SPECIALREG(id_aa64mmfr0_el1);
+	vtcr = VTCR_RES1 | VTCR_TG0_4K | VTCR_SH0_INNER |
+	    VTCR_ORGN0_WBWA | VTCR_IRGN0_WBWA;
+	vtcr |= (ID_AA64MMFR0_PA_RANGE(mmfr0) & 0x7) << VTCR_PS_SHIFT;
+	if (vcpu->vc_parent->vm_pmap->have_4_level_pt)
+		vtcr |= VTCR_SL0_L0 | VTCR_T0SZ(64 - 48);
+	else
+		vtcr |= VTCR_SL0_L1 | VTCR_T0SZ(64 - 39);
+	vcpu->vc_vtcr_el2 = vtcr;
+
+	vcpu->vc_vttbr_el2 = VTTBR_VMID(vcpu->vc_vpid) |
+	    (vcpu->vc_parent->vm_pmap->pm_pt0pa & VTTBR_BADDR_MASK);
 
 	return (0);
 }
@@ -274,11 +291,98 @@ vmm_restore_guest_sysregs(struct vcpu *vcpu)
 	__asm volatile("isb" ::: "memory");
 }
 
+int
+vmm_get_guest_memtype(struct vm *vm, paddr_t gpa)
+{
+	struct vm_mem_range *vmr;
+	int i;
+
+	for (i = 0; i < vm->vm_nmemranges; i++) {
+		vmr = &vm->vm_memranges[i];
+		if (gpa < vmr->vmr_gpa)
+			break;
+
+		if (gpa < vmr->vmr_gpa + vmr->vmr_size) {
+			if (vmr->vmr_type == VM_MEM_MMIO)
+				return (VMM_MEM_TYPE_MMIO);
+			return (VMM_MEM_TYPE_REGULAR);
+		}
+	}
+
+	return (VMM_MEM_TYPE_UNKNOWN);
+}
+
+vaddr_t
+vmm_translate_gpa(struct vm *vm, paddr_t gpa)
+{
+	struct vm_mem_range *vmr;
+	vaddr_t hva = 0;
+	int i;
+
+	for (i = 0; i < vm->vm_nmemranges; i++) {
+		vmr = &vm->vm_memranges[i];
+		if (gpa >= vmr->vmr_gpa && gpa < vmr->vmr_gpa + vmr->vmr_size) {
+			hva = vmr->vmr_va + (gpa - vmr->vmr_gpa);
+			break;
+		}
+	}
+
+	return (hva);
+}
+
+static enum vmm_action
+vmm_fault_page(struct vcpu *vcpu, paddr_t gpa)
+{
+	struct proc *p = curproc;
+	paddr_t hpa, pa = trunc_page(gpa);
+	vaddr_t hva;
+	int ret;
+
+	hva = vmm_translate_gpa(vcpu->vc_parent, pa);
+	if (hva == 0) {
+		printf("%s: unable to translate gpa 0x%llx\n", __func__,
+		    (uint64_t)pa);
+		return (VMM_ACTION_TERMINATE);
+	}
+
+	/* If we don't already have a backing page... */
+	if (!pmap_extract(p->p_vmspace->vm_map.pmap, hva, &hpa)) {
+		/* ...fault a RW page into the process address space... */
+		ret = uvm_fault_wire(&p->p_vmspace->vm_map, hva,
+		    hva + PAGE_SIZE, PROT_READ | PROT_WRITE);
+		if (ret) {
+			printf("%s: uvm_fault failed %d hva=0x%llx\n", __func__,
+			    ret, (uint64_t)hva);
+			return (VMM_ACTION_TERMINATE);
+		}
+
+		/* ...and then get the mapping. */
+		if (!pmap_extract(p->p_vmspace->vm_map.pmap, hva, &hpa)) {
+			printf("%s: failed to extract hpa for hva 0x%llx\n",
+			    __func__, (uint64_t)hva);
+			return (VMM_ACTION_TERMINATE);
+		}
+	}
+
+	/* Insert a RWX mapping into the guest's stage 2 pmap. */
+	ret = pmap_enter(vcpu->vc_parent->vm_pmap, pa, hpa,
+	    PROT_READ | PROT_WRITE | PROT_EXEC,
+	    PROT_READ | PROT_WRITE | PROT_EXEC | PMAP_WIRED);
+	if (ret) {
+		printf("%s: pmap_enter failed pa=0x%llx, hpa=0x%llx\n",
+		    __func__, (uint64_t)pa, (uint64_t)hpa);
+		return (VMM_ACTION_TERMINATE);
+	}
+
+	return (VMM_ACTION_RETRY);
+}
+
 static enum vmm_action
 vmm_vhe_handle_exit(struct vcpu *vcpu, struct vm_run_params *vrp)
 {
-	uint32_t ec;
-	uint32_t esr = vcpu->vc_esr_el2;
+	uint64_t gpa;
+	uint32_t ec, esr = vcpu->vc_esr_el2;
+	int memtype;
 
 	ec = ESR_ELx_EXCEPTION(esr);
 	switch (ec) {
@@ -299,20 +403,42 @@ vmm_vhe_handle_exit(struct vcpu *vcpu, struct vm_run_params *vrp)
 		vrp->vrp_exit_reason = VM_EXIT_ARM64_SYSREG;
 		break;
 	case EXCP_INSN_ABORT_L:
+		gpa = ((vcpu->vc_hpfar_el2 & 0x00000ffffffffff0ULL) << 8) |
+		    (vcpu->vc_far_el2 & PAGE_MASK);
+		memtype = vmm_get_guest_memtype(vcpu->vc_parent, gpa);
+		if (memtype == VMM_MEM_TYPE_REGULAR)
+			return (vmm_fault_page(vcpu, gpa));
+
 		vrp->vrp_exit_reason = VM_EXIT_ARM64_INSN_ABORT;
-		break;
+		return (VMM_ACTION_TERMINATE);
 	case EXCP_DATA_ABORT_L:
-		vrp->vrp_exit_reason = VM_EXIT_ARM64_DATA_ABORT;
-		vrp->vrp_exit->vda.vda_esr = esr;
-		vrp->vrp_exit->vda.vda_far = vcpu->vc_far_el2;
-		vrp->vrp_exit->vda.vda_gpa = vcpu->vc_hpfar_el2 << 8;
-		if (esr & ISS_DATA_ISV) {
-			vrp->vrp_exit->vda.vda_isv = 1;
-			vrp->vrp_exit->vda.vda_sas = (esr & ISS_DATA_SAS_MASK) >> 22;
-			vrp->vrp_exit->vda.vda_wnr = (esr & ISS_DATA_WnR) ? 1 : 0;
-			vrp->vrp_exit->vda.vda_reg = (esr & ISS_DATA_SRT_MASK) >> 16;
-		} else {
-			vrp->vrp_exit->vda.vda_isv = 0;
+		gpa = ((vcpu->vc_hpfar_el2 & 0x00000ffffffffff0ULL) << 8) |
+		    (vcpu->vc_far_el2 & PAGE_MASK);
+		memtype = vmm_get_guest_memtype(vcpu->vc_parent, gpa);
+		switch (memtype) {
+		case VMM_MEM_TYPE_REGULAR:
+			return (vmm_fault_page(vcpu, gpa));
+		case VMM_MEM_TYPE_MMIO:
+			vrp->vrp_exit_reason = VM_EXIT_ARM64_DATA_ABORT;
+			vrp->vrp_exit->vda.vda_esr = esr;
+			vrp->vrp_exit->vda.vda_far = vcpu->vc_far_el2;
+			vrp->vrp_exit->vda.vda_gpa = gpa;
+			if (esr & ISS_DATA_ISV) {
+				vrp->vrp_exit->vda.vda_isv = 1;
+				vrp->vrp_exit->vda.vda_sas =
+				    (esr & ISS_DATA_SAS_MASK) >> 22;
+				vrp->vrp_exit->vda.vda_wnr =
+				    (esr & ISS_DATA_WnR) ? 1 : 0;
+				vrp->vrp_exit->vda.vda_reg =
+				    (esr & ISS_DATA_SRT_MASK) >> 16;
+			} else {
+				vrp->vrp_exit->vda.vda_isv = 0;
+			}
+			return (VMM_ACTION_ASSIST);
+		default:
+			printf("%s: unknown memory type %d for GPA 0x%llx\n",
+			    __func__, memtype, (uint64_t)gpa);
+			return (VMM_ACTION_TERMINATE);
 		}
 		break;
 	default:
@@ -327,9 +453,10 @@ int
 vm_run(struct vm *vm, struct vm_run_params *vrp)
 {
 	struct vcpu *vcpu;
+	enum vmm_action action;
 	uint64_t host_hcr;
-	int ret = 0;
 	u_int next, old;
+	int ret = 0;
 
 	vcpu = vm_find_vcpu(vm, vrp->vrp_vcpu_id);
 	if (vcpu == NULL) {
@@ -363,6 +490,7 @@ vm_run(struct vm *vm, struct vm_run_params *vrp)
 	host_hcr = READ_SPECIALREG(hcr_el2);
 
 	/* Set up guest Stage-2 translation base and guest HCR_EL2 */
+	WRITE_SPECIALREG(vtcr_el2, vcpu->vc_vtcr_el2);
 	WRITE_SPECIALREG(vttbr_el2, vcpu->vc_vttbr_el2);
 	WRITE_SPECIALREG(hcr_el2, vcpu->vc_hcr_el2);
 	__asm volatile("isb" ::: "memory");
@@ -370,8 +498,23 @@ vm_run(struct vm *vm, struct vm_run_params *vrp)
 	/* Restore guest system registers */
 	vmm_restore_guest_sysregs(vcpu);
 
-	/* Enter guest EL1 */
-	arm64_vhe_enter_guest(vcpu);
+	for (;;) {
+		if (vcpu_must_yield(vcpu)) {
+			vrp->vrp_exit_reason = VM_EXIT_NONE;
+			action = VMM_ACTION_ASSIST;
+			break;
+		}
+
+		/* Enter guest EL1 */
+		arm64_vhe_enter_guest(vcpu);
+
+		/* Classify exit */
+		action = vmm_vhe_handle_exit(vcpu, vrp);
+		if (action == VMM_ACTION_RETRY)
+			continue;
+
+		break;
+	}
 
 	/* Restore host HCR_EL2 */
 	WRITE_SPECIALREG(hcr_el2, host_hcr);
@@ -382,13 +525,15 @@ vm_run(struct vm *vm, struct vm_run_params *vrp)
 
 	WRITE_ONCE(vcpu->vc_curcpu, NULL);
 
-	/* Classify exit */
-	vmm_vhe_handle_exit(vcpu, vrp);
-
 	/* Copy out updated register state */
 	vcpu->vc_exit.vrs = vcpu->vc_regs;
 
-	atomic_store_int(&vcpu->vc_state, VCPU_STATE_STOPPED);
+	if (action == VMM_ACTION_TERMINATE) {
+		vrp->vrp_exit_reason = VM_EXIT_TERMINATED;
+		atomic_store_int(&vcpu->vc_state, VCPU_STATE_TERMINATED);
+	} else {
+		atomic_store_int(&vcpu->vc_state, VCPU_STATE_STOPPED);
+	}
 
 	if (copyout(&vcpu->vc_exit, vrp->vrp_exit, sizeof(struct vm_exit)))
 		ret = EFAULT;

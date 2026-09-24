@@ -24,7 +24,10 @@
 #include <uvm/uvm.h>
 
 #include <machine/cpufunc.h>
+#include <machine/hypervisor.h>
 #include <machine/pmap.h>
+
+#include "vmm.h"
 
 #include <machine/db_machdep.h>
 #include <ddb/db_extern.h>
@@ -41,6 +44,14 @@ static inline void
 ttlb_flush(pmap_t pm, vaddr_t va)
 {
 	vaddr_t resva;
+
+#if NVMM > 0
+	if (pmap_is_stage2(pm)) {
+		__asm volatile("dsb ishst; tlbi vmalls12e1is; dsb ish; isb"
+		    ::: "memory");
+		return;
+	}
+#endif
 
 	if (!pm->pm_active)
 		return;
@@ -675,7 +686,8 @@ pmap_enter(pmap_t pm, vaddr_t va, paddr_t pa, vm_prot_t prot, int flags)
 	 * Insert into table, if this mapping said it needed to be mapped
 	 * now.
 	 */
-	if (flags & (PROT_READ|PROT_WRITE|PROT_EXEC|PMAP_WIRED)) {
+	if ((flags & (PROT_READ|PROT_WRITE|PROT_EXEC|PMAP_WIRED)) ||
+	    pmap_is_stage2(pm)) {
 		pmap_pte_insert(pted);
 		ttlb_flush(pm, va & ~PAGE_MASK);
 	}
@@ -951,6 +963,7 @@ pmap_pinit(pmap_t pm)
 
 	pmap_extract(pmap_kernel(), l0va, (paddr_t *)&pm->pm_pt0pa);
 
+	pm->pm_type = PMAP_TYPE_NORMAL;
 	pmap_reference(pm);
 }
 
@@ -974,6 +987,14 @@ pmap_create(void)
 		pmap_vp_poolcache = 20;
 	}
 	return (pmap);
+}
+
+void
+pmap_convert(struct pmap *pm, int mode)
+{
+	mtx_enter(&pm->pm_mtx);
+	pm->pm_type = mode;
+	mtx_leave(&pm->pm_mtx);
 }
 
 /*
@@ -1311,6 +1332,7 @@ pmap_bootstrap(long kvo, paddr_t lpt1, long kernelstart, long kernelend,
 	pmap_kernel()->pm_active = 1;
 	pmap_kernel()->pm_guarded = ATTR_GP;
 	pmap_kernel()->pm_asid = 0;
+	pmap_kernel()->pm_type = PMAP_TYPE_NORMAL;
 
 	mtx_init(&pmap_tramp.pm_mtx, IPL_VM);
 	pmap_tramp.pm_vp.l1 = (struct pmapvp1 *)va + 1;
@@ -1318,6 +1340,7 @@ pmap_bootstrap(long kvo, paddr_t lpt1, long kernelstart, long kernelend,
 	pmap_tramp.pm_active = 1;
 	pmap_tramp.pm_guarded = ATTR_GP;
 	pmap_tramp.pm_asid = 0;
+	pmap_tramp.pm_type = PMAP_TYPE_NORMAL;
 
 	/* Mark ASID 0 as in-use. */
 	pmap_asid[0] |= (3U << 0);
@@ -1781,6 +1804,34 @@ pmap_pte_update(struct pte_desc *pted, uint64_t *pl3)
 	uint64_t pte, access_bits;
 	pmap_t pm = pted->pted_pmap;
 	uint64_t attr = ATTR_nG;
+
+#if NVMM > 0
+	if (pmap_is_stage2(pm)) {
+		switch (pted->pted_va & PMAP_CACHE_BITS) {
+		case PMAP_CACHE_DEV_NGNRNE:
+		case PMAP_CACHE_DEV_NGNRE:
+			attr = S2_MEMATTR_DEVICE_nGnRnE | S2_SH_NONE;
+			break;
+		default:
+			attr = S2_MEMATTR_NORMAL_WB | S2_SH_INNER;
+			break;
+		}
+		attr |= S2_AF;
+
+		access_bits = S2_AP_NONE;
+		if (pted->pted_pte & PROT_WRITE)
+			access_bits |= S2_AP_RW;
+		else if (pted->pted_pte & PROT_READ)
+			access_bits |= S2_AP_RO;
+
+		if (!(pted->pted_pte & PROT_EXEC))
+			access_bits |= S2_XN_ALL;
+
+		pte = (pted->pted_pte & PTE_RPGN) | attr | access_bits | L3_P;
+		*pl3 = (access_bits & (S2_AP_RO | S2_AP_RW)) ? pte : 0;
+		return;
+	}
+#endif
 
 	/* see mair in locore.S */
 	switch (pted->pted_va & PMAP_CACHE_BITS) {

@@ -121,7 +121,6 @@ drop_to_el1:
 
 	/* Record that we booted at EL2 (drop to EL1) */
 	adr	x2, arm64_boot_el2
-	sub	x2, x2, x29 // VA -> PA
 	mov	x3, #1
 	str	x3, [x2]
 
@@ -141,7 +140,6 @@ drop_to_el1:
 
 	/* Hypervisor trap functions */
 	adr	x2, hyp_vectors
-	sub	x2, x2, x29 // VA -> PA
 	msr	vbar_el2, x2
 
 	mov	x2, #(PSR_F | PSR_I | PSR_A | PSR_D | PSR_M_EL1h)

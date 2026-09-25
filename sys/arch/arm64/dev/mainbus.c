@@ -42,6 +42,7 @@ void mainbus_attach_apm(struct device *);
 void mainbus_attach_framebuffer(struct device *);
 void mainbus_attach_firmware(struct device *);
 void mainbus_attach_resvmem(struct device *);
+void mainbus_attach_vmm(struct device *);
 
 struct mainbus_softc {
 	struct device		 sc_dev;
@@ -148,6 +149,7 @@ mainbus_attach(struct device *parent, struct device *self, void *aux)
 	}
 
 	mainbus_attach_apm(self);
+	mainbus_attach_vmm(self);
 
 	/* Scan the whole tree. */
 	for (sc->sc_early = 2; sc->sc_early >= 0; sc->sc_early--) {
@@ -403,6 +405,17 @@ mainbus_attach_apm(struct device *self)
 
 	memset(&fa, 0, sizeof(fa));
 	fa.fa_name = "apm";
+
+	config_found(self, &fa, NULL);
+}
+
+void
+mainbus_attach_vmm(struct device *self)
+{
+	struct fdt_attach_args fa;
+
+	memset(&fa, 0, sizeof(fa));
+	fa.fa_name = "vmm";
 
 	config_found(self, &fa, NULL);
 }

@@ -94,6 +94,20 @@ struct vm_exit_data_abort {
 };
 
 /*
+ * struct vm_exit_sysreg: describes an MSR/MRS system register access trap
+ */
+struct vm_exit_sysreg {
+	uint32_t	vsr_esr;		/* ESR_EL2 register */
+	uint8_t		vsr_op0;
+	uint8_t		vsr_op1;
+	uint8_t		vsr_crn;
+	uint8_t		vsr_crm;
+	uint8_t		vsr_op2;
+	uint8_t		vsr_reg;		/* Target register Rt */
+	uint8_t		vsr_read;		/* 1 = MRS (read), 0 = MSR (write) */
+};
+
+/*
  * struct vm_exit
  *
  * Contains VM exit information communicated to vmd(8). This information is
@@ -102,6 +116,7 @@ struct vm_exit_data_abort {
 struct vm_exit {
 	union {
 		struct vm_exit_data_abort	vda;
+		struct vm_exit_sysreg		vsr;
 	};
 	struct vcpu_reg_state			vrs;
 };

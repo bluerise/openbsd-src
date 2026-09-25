@@ -601,7 +601,15 @@ vmm_vhe_handle_exit(struct vcpu *vcpu, struct vm_run_params *vrp)
 		break;
 	case EXCP_MSR:
 		vrp->vrp_exit_reason = VM_EXIT_ARM64_SYSREG;
-		break;
+		vrp->vrp_exit->vsr.vsr_esr = esr;
+		vrp->vrp_exit->vsr.vsr_op0 = ISS_MSR_OP0(esr);
+		vrp->vrp_exit->vsr.vsr_op1 = ISS_MSR_OP1(esr);
+		vrp->vrp_exit->vsr.vsr_crn = ISS_MSR_CRn(esr);
+		vrp->vrp_exit->vsr.vsr_crm = ISS_MSR_CRm(esr);
+		vrp->vrp_exit->vsr.vsr_op2 = ISS_MSR_OP2(esr);
+		vrp->vrp_exit->vsr.vsr_reg = ISS_MSR_Rt(esr);
+		vrp->vrp_exit->vsr.vsr_read = (esr & ISS_MSR_DIR) ? 1 : 0;
+		return (VMM_ACTION_ASSIST);
 	case EXCP_INSN_ABORT_L:
 		gpa = ((vcpu->vc_hpfar_el2 & 0x00000ffffffffff0ULL) << 8) |
 		    (vcpu->vc_far_el2 & PAGE_MASK);

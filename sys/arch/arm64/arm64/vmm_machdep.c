@@ -62,11 +62,12 @@ vmm_probe_machdep(struct device *parent, void *match, void *aux)
 	if (ID_AA64PFR0_EL2(pfr0) == ID_AA64PFR0_EL2_NONE)
 		return (0);
 
-	/* Currently we require ARMv8.1-A VHE support */
-	if (!vmm_has_vhe())
-		return (0);
+	if (vmm_has_vhe())
+		return (1);
+	if (arm64_boot_el2)
+		return (1);
 
-	return (1);
+	return (0);
 }
 
 void
@@ -76,10 +77,16 @@ vmm_attach_machdep(struct device *parent, struct device *self, void *aux)
 	uint64_t pfr0, vtr;
 
 	sc->sc_md.has_vhe = vmm_has_vhe();
-	sc->mode = VMM_MODE_ARM64;
+	if (sc->sc_md.has_vhe) {
+		sc->mode = VMM_MODE_ARM64;
+	} else {
+		sc->mode = VMM_MODE_ARM64_NVHE;
+		arm64_nvhe_install_vectors();
+	}
 
 	pfr0 = READ_SPECIALREG(id_aa64pfr0_el1);
-	if (ID_AA64PFR0_GIC(pfr0) != ID_AA64PFR0_GIC_CPUIF_NONE) {
+	if (sc->sc_md.has_vhe &&
+	    ID_AA64PFR0_GIC(pfr0) != ID_AA64PFR0_GIC_CPUIF_NONE) {
 		sc->sc_md.has_gicv3 = 1;
 		vtr = READ_SPECIALREG(ich_vtr_el2);
 		sc->sc_md.nr_lrs = ((vtr & ICH_VTR_LIST_MASK) >>
@@ -88,7 +95,10 @@ vmm_attach_machdep(struct device *parent, struct device *self, void *aux)
 			sc->sc_md.nr_lrs = VMM_ARM64_MAX_LRS;
 	}
 
-	printf(": ARM64 (VHE%s)", sc->sc_md.has_gicv3 ? ", GICv3" : "");
+	if (sc->sc_md.has_vhe)
+		printf(": ARM64 (VHE%s)", sc->sc_md.has_gicv3 ? ", GICv3" : "");
+	else
+		printf(": ARM64 (nVHE%s)", sc->sc_md.has_gicv3 ? ", GICv3" : "");
 }
 
 void
@@ -99,6 +109,8 @@ vmm_activate_machdep(struct device *self, int act)
 int
 vmm_start(void)
 {
+	if (vmm_softc->mode == VMM_MODE_ARM64_NVHE)
+		arm64_nvhe_install_vectors();
 	return (0);
 }
 
@@ -331,7 +343,8 @@ vmm_restore_guest_sysregs(struct vcpu *vcpu)
 static void
 vmm_restore_guest_timer(struct vcpu *vcpu)
 {
-	WRITE_SPECIALREG(cntvoff_el2, vcpu->vc_cntvoff_el2);
+	if (vmm_softc->mode == VMM_MODE_ARM64)
+		WRITE_SPECIALREG(cntvoff_el2, vcpu->vc_cntvoff_el2);
 	WRITE_SPECIALREG(cntv_cval_el0, vcpu->vc_cntv_cval_el0);
 	WRITE_SPECIALREG(cntv_ctl_el0, vcpu->vc_cntv_ctl_el0);
 	__asm volatile("isb" ::: "memory");
@@ -345,7 +358,8 @@ vmm_save_guest_timer(struct vcpu *vcpu)
 
 	/* Disable virtual timer in host context and clear offset */
 	WRITE_SPECIALREG(cntv_ctl_el0, 0);
-	WRITE_SPECIALREG(cntvoff_el2, 0);
+	if (vmm_softc->mode == VMM_MODE_ARM64)
+		WRITE_SPECIALREG(cntvoff_el2, 0);
 	__asm volatile("isb" ::: "memory");
 }
 
@@ -694,28 +708,34 @@ vm_run(struct vm *vm, struct vm_run_params *vrp)
 
 	WRITE_ONCE(vcpu->vc_curcpu, curcpu());
 
-	/* Save host HCR_EL2 and CNTHCTL_EL2 */
-	host_hcr = READ_SPECIALREG(hcr_el2);
-	host_cnthctl = READ_SPECIALREG(cnthctl_el2);
+	host_hcr = 0;
+	host_cnthctl = 0;
+	if (vmm_softc->mode == VMM_MODE_ARM64) {
+		/* Save host HCR_EL2 and CNTHCTL_EL2 */
+		host_hcr = READ_SPECIALREG(hcr_el2);
+		host_cnthctl = READ_SPECIALREG(cnthctl_el2);
 
-	/* Set up guest Stage-2 translation base */
-	WRITE_SPECIALREG(vtcr_el2, vcpu->vc_vtcr_el2);
-	WRITE_SPECIALREG(vttbr_el2, vcpu->vc_vttbr_el2);
+		/* Set up guest Stage-2 translation base */
+		WRITE_SPECIALREG(vtcr_el2, vcpu->vc_vtcr_el2);
+		WRITE_SPECIALREG(vttbr_el2, vcpu->vc_vttbr_el2);
 
-	/* Allow guest access to counters and virtual timer */
-	WRITE_SPECIALREG(cnthctl_el2, host_cnthctl | CNTHCTL_EL1PCEN |
-	    CNTHCTL_EL1PCTEN | CNTHCTL_EL1PTEN | CNTHCTL_EL0VTEN |
-	    CNTHCTL_EL0PTEN);
+		/* Allow guest access to counters and virtual timer */
+		WRITE_SPECIALREG(cnthctl_el2, host_cnthctl | CNTHCTL_EL1PCEN |
+		    CNTHCTL_EL1PCTEN | CNTHCTL_EL1PTEN | CNTHCTL_EL0VTEN |
+		    CNTHCTL_EL0PTEN);
+	}
 
 	/* Inject pending interrupt if requested */
 	vmm_inject_intr(vcpu);
 
-	/* Set guest HCR_EL2 */
-	WRITE_SPECIALREG(hcr_el2, vcpu->vc_hcr_el2);
-	__asm volatile("isb" ::: "memory");
+	if (vmm_softc->mode == VMM_MODE_ARM64) {
+		/* Set guest HCR_EL2 */
+		WRITE_SPECIALREG(hcr_el2, vcpu->vc_hcr_el2);
+		__asm volatile("isb" ::: "memory");
 
-	/* Restore guest system registers */
-	vmm_restore_guest_sysregs(vcpu);
+		/* Restore guest system registers */
+		vmm_restore_guest_sysregs(vcpu);
+	}
 
 	/* Restore guest virtual timer */
 	vmm_restore_guest_timer(vcpu);
@@ -731,13 +751,17 @@ vm_run(struct vm *vm, struct vm_run_params *vrp)
 		}
 
 		/* Enter guest EL1 */
-		arm64_vhe_enter_guest(vcpu);
+		if (vmm_softc->mode == VMM_MODE_ARM64)
+			arm64_vhe_enter_guest(vcpu);
+		else
+			arm64_nvhe_enter_guest(vcpu);
 
 		/* Classify exit */
 		action = vmm_vhe_handle_exit(vcpu, vrp);
 		if (action == VMM_ACTION_RETRY) {
 			vmm_inject_intr(vcpu);
-			WRITE_SPECIALREG(hcr_el2, vcpu->vc_hcr_el2);
+			if (vmm_softc->mode == VMM_MODE_ARM64)
+				WRITE_SPECIALREG(hcr_el2, vcpu->vc_hcr_el2);
 			continue;
 		}
 
@@ -750,16 +774,21 @@ vm_run(struct vm *vm, struct vm_run_params *vrp)
 	/* Save guest virtual timer */
 	vmm_save_guest_timer(vcpu);
 
-	/* Restore host HCR_EL2 and CNTHCTL_EL2 */
-	WRITE_SPECIALREG(hcr_el2, host_hcr);
-	WRITE_SPECIALREG(cnthctl_el2, host_cnthctl);
-	__asm volatile("isb" ::: "memory");
+	if (vmm_softc->mode == VMM_MODE_ARM64) {
+		/* Restore host HCR_EL2 and CNTHCTL_EL2 */
+		WRITE_SPECIALREG(hcr_el2, host_hcr);
+		WRITE_SPECIALREG(cnthctl_el2, host_cnthctl);
+		__asm volatile("isb" ::: "memory");
 
-	/* Clear temporary HCR_VI if set */
-	vcpu->vc_hcr_el2 &= ~HCR_VI;
+		/* Clear temporary HCR_VI if set */
+		vcpu->vc_hcr_el2 &= ~HCR_VI;
 
-	/* Save guest system registers */
-	vmm_save_guest_sysregs(vcpu);
+		/* Save guest system registers */
+		vmm_save_guest_sysregs(vcpu);
+	} else {
+		/* Clear temporary HCR_VI if set */
+		vcpu->vc_hcr_el2 &= ~HCR_VI;
+	}
 
 	WRITE_ONCE(vcpu->vc_curcpu, NULL);
 

@@ -85,10 +85,44 @@ include <machine/vmmvar.h>
 
 struct	vcpu
 member	VCPU_REGS	vc_regs
+member	VCPU_SP_EL0	vc_sp_el0
+member	VCPU_SP_EL1	vc_sp_el1
+member	VCPU_ELR_EL1	vc_elr_el1
+member	VCPU_SPSR_EL1	vc_spsr_el1
+member	VCPU_SCTLR_EL1	vc_sctlr_el1
+member	VCPU_CPACR_EL1	vc_cpacr_el1
+member	VCPU_TTBR0_EL1	vc_ttbr0_el1
+member	VCPU_TTBR1_EL1	vc_ttbr1_el1
+member	VCPU_TCR_EL1	vc_tcr_el1
+member	VCPU_ESR_EL1	vc_esr_el1
+member	VCPU_FAR_EL1	vc_far_el1
+member	VCPU_MAIR_EL1	vc_mair_el1
+member	VCPU_VBAR_EL1	vc_vbar_el1
+member	VCPU_CONTEXTIDR_EL1	vc_contextidr_el1
+member	VCPU_TPIDR_EL0	vc_tpidr_el0
+member	VCPU_TPIDR_EL1	vc_tpidr_el1
+member	VCPU_TPIDRRO_EL0	vc_tpidrro_el0
+member	VCPU_VTTBR_EL2	vc_vttbr_el2
+member	VCPU_VTCR_EL2	vc_vtcr_el2
+member	VCPU_HCR_EL2	vc_hcr_el2
+member	VCPU_CNTVOFF_EL2	vc_cntvoff_el2
 member	VCPU_HPFAR_EL2	vc_hpfar_el2
 member	VCPU_FAR_EL2	vc_far_el2
 member	VCPU_ESR_EL2	vc_esr_el2
 member	VCPU_EXIT_TYPE	vc_exit_type
+member	VCPU_HOST_SCTLR_EL1	vc_host_sctlr_el1
+member	VCPU_HOST_CPACR_EL1	vc_host_cpacr_el1
+member	VCPU_HOST_TTBR0_EL1	vc_host_ttbr0_el1
+member	VCPU_HOST_TTBR1_EL1	vc_host_ttbr1_el1
+member	VCPU_HOST_TCR_EL1	vc_host_tcr_el1
+member	VCPU_HOST_MAIR_EL1	vc_host_mair_el1
+member	VCPU_HOST_VBAR_EL1	vc_host_vbar_el1
+member	VCPU_HOST_CONTEXTIDR_EL1	vc_host_contextidr_el1
+member	VCPU_HOST_TPIDR_EL0	vc_host_tpidr_el0
+member	VCPU_HOST_TPIDR_EL1	vc_host_tpidr_el1
+member	VCPU_HOST_TPIDRRO_EL0	vc_host_tpidrro_el0
+member	VCPU_HOST_SP_EL0	vc_host_sp_el0
+member	VCPU_HOST_SP_EL1	vc_host_sp_el1
 
 struct	vcpu_reg_state
 member	VRS_GPRS	vrs_gprs

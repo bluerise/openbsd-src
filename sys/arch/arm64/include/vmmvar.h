@@ -150,7 +150,8 @@ enum {
 
 enum {
 	VMM_MODE_UNKNOWN,
-	VMM_MODE_ARM64
+	VMM_MODE_ARM64,
+	VMM_MODE_ARM64_NVHE
 };
 
 enum {
@@ -253,9 +254,29 @@ struct vcpu {
 #define VCPU_EXIT_TYPE_IRQ	1
 #define VCPU_EXIT_TYPE_FIQ	2
 #define VCPU_EXIT_TYPE_SERROR	3
+
+	/* Host system registers saved during nVHE guest entry */
+	uint64_t		 vc_host_sctlr_el1;
+	uint64_t		 vc_host_cpacr_el1;
+	uint64_t		 vc_host_ttbr0_el1;
+	uint64_t		 vc_host_ttbr1_el1;
+	uint64_t		 vc_host_tcr_el1;
+	uint64_t		 vc_host_mair_el1;
+	uint64_t		 vc_host_vbar_el1;
+	uint64_t		 vc_host_contextidr_el1;
+	uint64_t		 vc_host_tpidr_el0;
+	uint64_t		 vc_host_tpidr_el1;
+	uint64_t		 vc_host_tpidrro_el0;
+	uint64_t		 vc_host_sp_el0;
+	uint64_t		 vc_host_sp_el1;
 };
 
 SLIST_HEAD(vcpu_head, vcpu);
+
+extern uint64_t arm64_boot_el2;
+extern char arm64_nvhe_hyp_vectors[];
+int	arm64_nvhe_enter_guest(struct vcpu *);
+void	arm64_nvhe_install_vectors(void);
 
 int	vmm_probe_machdep(struct device *, void *, void *);
 void	vmm_attach_machdep(struct device *, struct device *, void *);

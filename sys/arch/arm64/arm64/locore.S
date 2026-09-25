@@ -119,6 +119,12 @@ drop_to_el1:
 	ldr	x2, .Lsctlr_res1
 	msr	sctlr_el1, x2
 
+	/* Record that we booted at EL2 (drop to EL1) */
+	adr	x2, arm64_boot_el2
+	sub	x2, x2, x29 // VA -> PA
+	mov	x3, #1
+	str	x3, [x2]
+
 	/* Don't trap to EL2 for exceptions */
 	mov	x2, #CPTR_RES1
 	msr	cptr_el2, x2
@@ -165,13 +171,19 @@ drop_to_el1:
 
 	.align 3
 .Lsctlr_res1:
-	.quad SCTLR_RES1
+	.quad	SCTLR_RES1
+
+	.globl arm64_boot_el2
+arm64_boot_el2:
+	.quad	0
+
 
 #define	VECT_EMPTY	\
 	.align 7;	\
 	1:	b	1b
 
 	.align 11
+	.globl hyp_vectors
 hyp_vectors:
 	VECT_EMPTY	/* Synchronous EL2t */
 	VECT_EMPTY	/* IRQ EL2t */
@@ -183,7 +195,11 @@ hyp_vectors:
 	VECT_EMPTY	/* FIQ EL2h */
 	VECT_EMPTY	/* Error EL2h */
 
-	VECT_EMPTY	/* Synchronous 64-bit EL1 */
+	/* Synchronous 64-bit EL1 */
+	.align 7
+	msr	vbar_el2, x0
+	eret
+
 	VECT_EMPTY	/* IRQ 64-bit EL1 */
 	VECT_EMPTY	/* FIQ 64-bit EL1 */
 	VECT_EMPTY	/* Error 64-bit EL1 */
